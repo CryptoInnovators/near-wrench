@@ -2,7 +2,7 @@ import { createHash, createPublicKey, randomUUID, verify as verifySignature } fr
 import { spawnSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 
-export const MODEL = "deepseek-ai/DeepSeek-V4.1-Flash-1017-abliterated";
+export const MODEL = "Qwen/Qwen3.8-27B";
 export const REGISTRY = "sworn-reg7-1113.testnet";
 const NEP413_TAG = Buffer.from([0x9d, 0x01, 0x00, 0x80]);
 const B58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
@@ -97,62 +97,64 @@ export async function verifyLinkedAddress(link, expectedMessage) {
 }
 
 async function jsonFetch(url, options = {}) {
-  const response = await fetch(url, { ...options, signal: options.signal ?? AbortSignal.timeout(15000) });
-  const body = await response.json();
-  if (!response.ok) throw new Error(`${url} returned HTTP ${response.status}: ${JSON.stringify(body).slice(0, 300)}`);
-  if (body.errors?.length) throw new Error(`${url} error: ${body.errors.map(e => e.message).join("; ")}`);
-  return body;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const response = await fetch(url, { ...options, signal: options.signal ?? AbortSignal.timeout(15000) });
+    if ((response.status === 429 || response.status >= 500) && attempt < 2) {
+      const retryAfter = Number(response.headers.get("retry-after"));
+      await new Promise(resolve => setTimeout(resolve, Math.min(retryAfter ? retryAfter * 1000 : 500 * 2 ** attempt, 5000)));
+      continue;
+    }
+    const body = await response.json();
+    if (!response.ok) throw new Error(`${url} returned HTTP ${response.status}: ${JSON.stringify(body).slice(0, 300)}`);
+    if (body.errors?.length) throw new Error(`${url} error: ${body.errors.map(e => e.message).join("; ")}`);
+    return body;
+  }
+  throw new Error(`${url} failed after retries`);
 }
 
 export async function collectPublicData(accountId, network = "mainnet", links = []) {
-  const nearblocks = network === "testnet" ? "https://api-testnet.nearblocks.io/v3" : "https://api.nearblocks.io/v3";
-  const paths = [
-    `accounts/${encodeURIComponent(accountId)}`,
-    `accounts/${encodeURIComponent(accountId)}/balance`,
-    `accounts/${encodeURIComponent(accountId)}/txns?limit=30`,
-    `accounts/${encodeURIComponent(accountId)}/ft-txns?limit=30`,
-    `accounts/${encodeURIComponent(accountId)}/staking-txns?limit=30`,
-    `accounts/${encodeURIComponent(accountId)}/assets/fts?limit=30`,
-    `accounts/${encodeURIComponent(accountId)}/assets/mts/fts?limit=30`,
-    `intents/txns?limit=100&account_id=${encodeURIComponent(accountId)}`,
-  ];
-  const [account, balance, txns, ftTxns, stakingTxns, ftAssets, mtFts, intentsTxns, rpcAccount, social] = await Promise.all([
-    ...paths.map(p => jsonFetch(`${nearblocks}/${p}`)),
+  const fastnear = network === "testnet" ? "https://test.api.fastnear.com" : "https://api.fastnear.com";
+  const transactions = network === "testnet" ? "https://tx.test.fastnear.com/v0" : "https://tx.main.fastnear.com/v0";
+  const [account, history, rpcAccount, social] = await Promise.all([
+    jsonFetch(`${fastnear}/v1/account/${encodeURIComponent(accountId)}/full`),
+    jsonFetch(`${transactions}/account`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ account_id: accountId, desc: true, limit: 20 }) }),
     rpc(network, "query", { request_type: "view_account", finality: "final", account_id: accountId }),
     jsonFetch(`https://api2.near.social/v1/accounts/${encodeURIComponent(accountId)}`),
   ]);
-  const transactionRows = txns.data ?? [];
+  const hashes = (history.account_txs ?? []).map(row => row.transaction_hash).filter(Boolean);
+  const txResult = hashes.length ? await jsonFetch(`${transactions}/transactions`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ tx_hashes: hashes }) }) : { transactions: [] };
+  const transactionRows = (txResult.transactions ?? []).map(row => row.transaction ?? row);
   const counterparties = new Map();
   const subaccounts = new Set();
   for (const tx of transactionRows) {
-    const signer = tx.signer_account_id ?? tx.signer_id;
-    const receiver = tx.receiver_account_id ?? tx.receiver_id;
+    const signer = tx.signer_id;
+    const receiver = tx.receiver_id;
     const other = signer === accountId ? receiver : signer;
     if (other && other !== accountId) counterparties.set(other, (counterparties.get(other) ?? 0) + 1);
-    if (receiver?.endsWith(`.${accountId}`) && (tx.actions ?? []).some(a => a.action === "CREATE_ACCOUNT")) subaccounts.add(receiver);
+    if (receiver?.endsWith(`.${accountId}`) && (tx.actions ?? []).some(a => a === "CreateAccount" || a.CreateAccount !== undefined)) subaccounts.add(receiver);
   }
-  const intentRows = (intentsTxns.data ?? []).filter(row => JSON.stringify(row).includes(accountId));
   return {
     collected_at: new Date().toISOString(),
     network,
     account_id: accountId,
     account_ownership: "NEP-413 FullAccess verified before collection",
-    balances: { near: rpcAccount.amount, staked_near: rpcAccount.locked, indexed: balance.data },
-    staking: stakingTxns.data ?? [],
-    ft_holdings: ftAssets.data ?? [],
-    mt_ft_holdings: mtFts.data ?? [],
-    ft_transfers: ftTxns.data ?? [],
+    balances: { near: rpcAccount.amount, staked_near: rpcAccount.locked, indexed: account.state?.balance },
+    staking: account.pools ?? [],
+    ft_holdings: account.tokens ?? [],
+    mt_ft_holdings: [],
+    ft_transfers: [],
     recent_transactions: transactionRows,
     top_counterparties: [...counterparties].sort((a, b) => b[1] - a[1]).slice(0, 10).map(([account_id, transactions]) => ({ account_id, transactions })),
     named_subaccounts_created: [...subaccounts],
-    near_intents_activity: intentRows,
+    near_intents_activity: [],
     near_social_profile: social,
     linked_addresses: links,
+    data_quality: { recent_transactions: transactionRows.length, intents_history: "not indexed by the configured public source", mt_ft_holdings: "not included by FastNear full-account endpoint", ft_transfers: "not included by FastNear full-account endpoint" },
     sources: {
       near_rpc: network === "testnet" ? "https://near-testnet.drpc.org" : "https://rpc.mainnet.fastnear.com",
-      nearblocks: `${nearblocks}/accounts/${encodeURIComponent(accountId)}`,
+      fastnear_account: `${fastnear}/v1/account/${encodeURIComponent(accountId)}/full`,
+      fastnear_transactions: `${transactions}/account`,
       near_social: `https://api2.near.social/v1/accounts/${encodeURIComponent(accountId)}`,
-      intents: `${nearblocks}/intents/txns`,
     },
   };
 }
@@ -173,7 +175,9 @@ export async function requestAttestedDossier(bundle, apiKey, model = MODEL) {
   const prompt = dossierPrompt(bundle);
   const requestBytes = Buffer.from(JSON.stringify({
     messages: [{ role: "user", content: `[salt ${randomUUID().replaceAll("-", "")}] ${prompt}` }],
-    max_tokens: 1024,
+    max_tokens: 2048,
+    response_format: { type: "json_object" },
+    chat_template_kwargs: { enable_thinking: false },
     model,
     stream: false,
   }));
@@ -213,7 +217,10 @@ export async function requestAttestedDossier(bundle, apiKey, model = MODEL) {
   });
   if (!verdict.ok) throw new Error(`Sworn registry refused the response: ${verdict.reason ?? "unknown reason"}`);
   const content = completion.choices?.[0]?.message?.content;
-  if (typeof content !== "string") throw new Error("NEAR AI response has no text content");
+  if (typeof content !== "string" || !content.trim()) {
+    if (completion.choices?.[0]?.finish_reason === "length") throw new Error("NEAR AI response reached its token limit before returning dossier JSON");
+    throw new Error("NEAR AI response has no text content");
+  }
   let dossier;
   try { dossier = JSON.parse(content); } catch { throw new Error("NEAR AI response is not valid JSON"); }
   return { dossier, attestation: { registry: REGISTRY, model, registered_key: registration.public_key, registration, verdict, request_sha256: reqHash, response_sha256: resHash, signature: receipt.signature } };
@@ -224,15 +231,16 @@ async function view(accountId, method, args) {
   return JSON.parse(Buffer.from(result.result).toString("utf8"));
 }
 
-export async function confidentialQuote({ recipient, refundTo = recipient, originAsset, destinationAsset = "nep141:wrap.near", amount }) {
+export async function confidentialQuote({ recipient, refundTo = recipient, originAsset, destinationAsset = "nep141:wrap.near", amount, accessToken }) {
   if (!/^[0-9]+$/.test(amount) || BigInt(amount) <= 0n) throw new Error("amount must be a positive integer in base units");
+  if (typeof accessToken !== "string" || !accessToken) throw new Error("1Click user-session token required for confidential quotes");
   const request = {
     dry: false, swapType: "EXACT_INPUT", slippageTolerance: 100,
     originAsset, depositType: "ORIGIN_CHAIN", destinationAsset, amount,
     refundTo, refundType: "ORIGIN_CHAIN", recipient, recipientType: "CONFIDENTIAL_INTENTS",
     deadline: new Date(Date.now() + 15 * 60_000).toISOString(), confidentiality: "basic",
   };
-  return jsonFetch("https://1click.chaindefuser.com/v0/quote", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(request) });
+  return jsonFetch("https://1click.chaindefuser.com/v0/quote", { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${accessToken}` }, body: JSON.stringify(request) });
 }
 
 export async function readJson(path) {

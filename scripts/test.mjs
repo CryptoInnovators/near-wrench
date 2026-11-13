@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readJson, proofBindsAccount, verifyNep413 } from "./wrench.mjs";
+import { confidentialQuote, readJson, proofBindsAccount, verifyNep413 } from "./wrench.mjs";
 
 const fixture = await readJson(new URL("../fixtures/wrenchaudit1113/public-data.json", import.meta.url));
 assert.equal(fixture.network, "testnet");
@@ -16,7 +16,9 @@ forged[0] ^= 1;
 assert.equal(verifyNep413({ ...fixture.proof, signature: forged.toString("base64") }), false, "one-bit forged signature is refused");
 assert.equal(proofBindsAccount({ ...fixture.proof, accountId: "somebodyelse.testnet" }), false, "a valid signature cannot be relabelled to another account");
 assert.equal(fixture.sources.nearblocks.staking_txns.length, 0, "the captured account has no indexed staking history");
+await assert.rejects(confidentialQuote({ recipient: fixture.account_id, originAsset: "nep141:wrap.near", amount: "1" }), /user-session token required/, "confidential quote refuses to call 1Click without user ownership auth");
 
 console.log(`PASS recorded public data: ${fixture.sources.nearblocks.txns.length} transaction, ${fixture.sources.nearblocks.ft_txns.length} FT transfer, ${fixture.sources.nearblocks.staking_txns.length} staking event`);
 console.log("PASS NEP-413 signature, account binding, and forged-signature refusal");
 console.log("PASS unowned-address negative fixture has a valid, account-bound signature");
+console.log("PASS confidential 1Click quote requires a user-session token");

@@ -1,7 +1,7 @@
 import { createServer } from "node:http";
 import { randomBytes, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { collectPublicData, confidentialQuote, requestAttestedDossier, verifyAccountOwnership, verifyLinkedAddress } from "./wrench.mjs";
+import { collectPublicData, confidentialQuote, decodeBase58, requestAttestedDossier, verifyAccountOwnership, verifyLinkedAddress, verifyNep413 } from "./wrench.mjs";
 
 const host = "127.0.0.1";
 const port = Number(process.env.PORT ?? 8787);
@@ -10,7 +10,7 @@ const sessions = new Map();
 const key = process.env.NEAR_AI_API_KEY;
 
 function send(res, status, body, type = "application/json; charset=utf-8") {
-  res.writeHead(status, { "content-type": type, "cache-control": "no-store", "x-content-type-options": "nosniff", "content-security-policy": "default-src 'self'; connect-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'" });
+  res.writeHead(status, { "content-type": type, "cache-control": "no-store", "x-content-type-options": "nosniff", "content-security-policy": "default-src 'self'; connect-src 'self' https://rpc.mainnet.fastnear.com https://helper.mainnet.near.org https://app.mynearwallet.com https://api.mynearwallet.com; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self' 'unsafe-inline' https://esm.sh; base-uri 'none'; frame-ancestors 'none'" });
   res.end(type.startsWith("application/json") ? JSON.stringify(body) : body);
 }
 
@@ -31,6 +31,10 @@ async function handle(req, res) {
   const url = new URL(req.url, `http://${host}:${port}`);
   if (req.method === "GET" && url.pathname === "/") {
     send(res, 200, await readFile(new URL("../web/index.html", import.meta.url), "utf8"), "text/html; charset=utf-8");
+    return;
+  }
+  if (req.method === "GET" && url.pathname === "/favicon.ico") {
+    res.writeHead(204, { "cache-control": "public, max-age=86400" }).end();
     return;
   }
   if (req.method === "GET" && url.pathname === "/api/challenge") {
@@ -68,12 +72,34 @@ async function handle(req, res) {
     const input = await bodyJson(req);
     const session = sessions.get(input.session);
     if (!session || session.expires < Date.now()) return send(res, 401, { error: "Dossier session expired. Run a new signed review before requesting a quote." });
+    if (!session.oneClickToken || session.oneClickTokenExpires < Date.now()) return send(res, 401, { error: "Sign the NEAR Intents ownership request before quoting." });
     const owner = await verifyAccountOwnership(session.proof, "mainnet");
     const amount = String(input.amount ?? "");
     if (!/^\d+$/.test(amount) || BigInt(amount) > BigInt(session.bundle.balances.near)) return send(res, 400, { error: "Amount must be a positive integer no greater than the verified public NEAR balance." });
     if (BigInt(amount) === 0n) return send(res, 400, { error: "Amount must be greater than zero." });
-    const quote = await confidentialQuote({ recipient: owner.account_id, refundTo: owner.account_id, originAsset: "nep141:wrap.near", destinationAsset: "nep141:wrap.near", amount });
+    const quote = await confidentialQuote({ recipient: owner.account_id, refundTo: owner.account_id, originAsset: "nep141:wrap.near", destinationAsset: "nep141:wrap.near", amount, accessToken: session.oneClickToken });
     return send(res, 200, quote);
+  }
+  if (req.method === "POST" && url.pathname === "/api/quote-session") {
+    const input = await bodyJson(req);
+    const session = sessions.get(input.session);
+    if (!session || session.expires < Date.now()) return send(res, 401, { error: "Dossier session expired. Run a new signed review before requesting a quote." });
+    const signedData = input.signedData;
+    if (signedData?.standard !== "nep413" || signedData.public_key !== session.proof.publicKey || signedData.payload?.recipient !== "intents.near" || !signedData.signature?.startsWith("ed25519:")) return send(res, 400, { error: "The NEAR Intents signature must use the verified account key and intents.near recipient." });
+    let intent;
+    try { intent = JSON.parse(signedData.payload.message); } catch { return send(res, 400, { error: "The NEAR Intents signature must contain a valid empty intent." }); }
+    const deadline = Date.parse(intent.deadline);
+    if (intent.signer_id !== session.proof.accountId || !Array.isArray(intent.intents) || intent.intents.length !== 0 || !Number.isFinite(deadline) || deadline <= Date.now() || deadline > Date.now() + 5 * 60_000) return send(res, 400, { error: "The NEAR Intents signature must authorize only an empty intent for this account and expire within five minutes." });
+    let signature;
+    try { signature = decodeBase58(signedData.signature.slice("ed25519:".length)); } catch { return send(res, 400, { error: "The NEAR Intents signature encoding is invalid." }); }
+    if (signature.length !== 64 || !verifyNep413({ accountId: session.proof.accountId, publicKey: signedData.public_key, signature: signature.toString("base64"), payload: signedData.payload })) return send(res, 400, { error: "The NEAR Intents signature did not verify." });
+    const response = await fetch("https://1click.chaindefuser.com/v0/auth/authenticate", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ signedData }), signal: AbortSignal.timeout(15000) });
+    const auth = await response.json();
+    if (!response.ok) return send(res, response.status, { error: auth.message ?? auth.error ?? "1Click user authentication failed." });
+    if (typeof auth.accessToken !== "string" || !Number.isFinite(auth.expiresIn)) return send(res, 502, { error: "1Click returned an invalid user session." });
+    session.oneClickToken = auth.accessToken;
+    session.oneClickTokenExpires = Date.now() + auth.expiresIn * 1000;
+    return send(res, 200, { expiresIn: auth.expiresIn });
   }
   send(res, 404, { error: "Route not found" });
 }
