@@ -1,5 +1,5 @@
 .env
-.progress/LEDGER.md
+.progress/
 target/
 node_modules/
 .agentctx/
