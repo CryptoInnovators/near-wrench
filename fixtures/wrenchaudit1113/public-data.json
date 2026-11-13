@@ -1,0 +1,120 @@
+{
+  "captured_at": "2026-11-13T14:32:43.666Z",
+  "network": "testnet",
+  "account_id": "wrenchaudit1113.testnet",
+  "proof": {
+    "accountId": "wrenchaudit1113.testnet",
+    "publicKey": "ed25519:G3AKv9S7Kyz98BvHuDj62a1m1GcP3QjcBfj446LZiGje",
+    "signature": "X+J0En/OFi2lNtVQCR5vWRaEuUGgwQNV7821apuN2JhMUFmsqGGFvhyRTT1JHM8khbAUJ4Z40ZBaPKWVIKfNBw==",
+    "payload": {
+      "message": "Authorize Wrench dossier for wrenchaudit1113.testnet nonce=a542bdbc0b06c0e7b7429e3ef0e0054766e9c199bfd75332ce06a449676f2a52",
+      "nonce": "pUK9vAsGwOe3Qp4+8OAFR2bpwZm/11MyzgakSWdvKlI=",
+      "recipient": "wrench.local"
+    }
+  },
+  "sources": {
+    "rpc": {
+      "url": "https://near-testnet.drpc.org",
+      "account": {
+        "amount": "10000000000000000000000000",
+        "block_hash": "7PTXRBfvb47h1A36fj9sCyAe82iAujKS7PMrhedvUDzz",
+        "block_height": 277522685,
+        "code_hash": "11111111111111111111111111111111",
+        "locked": "0",
+        "storage_paid_at": 0,
+        "storage_usage": 182
+      }
+    },
+    "nearblocks": {
+      "base": "https://api-testnet.nearblocks.io/v3",
+      "account": {
+        "account_id": "wrenchaudit1113.testnet",
+        "created": {
+          "block_timestamp": "1794579591701560626",
+          "transaction_hash": "B2cvPKcELjGhCnJJ7mWGbqea2tqnMrLMX5utKzH7L8sX"
+        },
+        "deleted": {},
+        "locked": false
+      },
+      "balance": {
+        "account_id": "wrenchaudit1113.testnet",
+        "amount": "10000000000000000000000000",
+        "amount_staked": "0",
+        "storage_usage": "182"
+      },
+      "txns": [
+        {
+          "actions": [
+            {
+              "action": "CREATE_ACCOUNT",
+              "method": null
+            },
+            {
+              "action": "TRANSFER",
+              "method": null
+            },
+            {
+              "action": "ADD_KEY",
+              "method": null
+            }
+          ],
+          "actions_agg": {
+            "deposit": "10000000000000000000000000"
+          },
+          "block": {
+            "block_hash": "6sq2FLFBBbEvqLFjPB94Y41zagGwJWSVjMuykCehr1Fb",
+            "block_height": "277521368",
+            "block_timestamp": "1794579591701560626"
+          },
+          "block_timestamp": "1794579591701560626",
+          "index_in_chunk": 2,
+          "outcomes": {
+            "status": true
+          },
+          "outcomes_agg": {
+            "transaction_fee": "7114989537500000000000"
+          },
+          "receiver_account_id": "wrenchaudit1113.testnet",
+          "shard_id": 4,
+          "signer_account_id": "testnet",
+          "transaction_hash": "B2cvPKcELjGhCnJJ7mWGbqea2tqnMrLMX5utKzH7L8sX"
+        }
+      ],
+      "ft_txns": [],
+      "staking_txns": [],
+      "ft_assets": [],
+      "intents_txns": []
+    },
+    "social": {
+      "url": "https://api2.near.social/v1/accounts/wrenchaudit1113.testnet",
+      "profile": {
+        "account_id": "wrenchaudit1113.testnet",
+        "has_profile": false,
+        "name": null,
+        "about": null,
+        "avatar": null,
+        "avatar_url": null,
+        "banner": null,
+        "banner_url": null,
+        "location": null,
+        "links": {},
+        "counts": {
+          "followers": 0,
+          "following": 0,
+          "posts": 0
+        },
+        "joined_at": null
+      }
+    }
+  },
+  "unowned_proof": {
+    "accountId": "unowned-wrench-target.testnet",
+    "publicKey": "ed25519:G3AKv9S7Kyz98BvHuDj62a1m1GcP3QjcBfj446LZiGje",
+    "signature": "DIwfI0PJgfACHc6efsdLudzHvpy/meU+3gf6N/15HD8s5198hdDlCjtiu0s2UzqMS8FE2ih3niWAS5zcrmmnAg==",
+    "payload": {
+      "message": "Authorize Wrench dossier for unowned-wrench-target.testnet nonce=fffefdfcfbfaf9f8f7f6f5f4f3f2f1f0efeeedecebeae9e8e7e6e5e4e3e2e1e0",
+      "nonce": "//79/Pv6+fj39vX08/Lx8O/u7ezr6uno5+bl5OPi4eA=",
+      "recipient": "wrench.local"
+    }
+  }
+}
