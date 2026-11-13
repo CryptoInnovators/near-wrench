@@ -48,4 +48,4 @@ Wrench reads like a private security case file: the signing and consent steps st
 - Data: 13px DM Mono with tabular figures.
 - Layout: 240px signing rail beside a 1fr evidence sheet at wide widths; one column below 900px.
 - Controls: 44px minimum height, visible focus ring, explicit disabled, loading, error, and success states.
-- Evidence: plain source-linked rows, not a decorative dashboard or an unverified score.
+- Evidence: plain source-linked rows.

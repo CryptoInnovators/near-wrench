@@ -1,0 +1,28 @@
+name = "near-wrench"
+main = "src/index.mjs"
+compatibility_date = "2026-11-01"
+compatibility_flags = ["nodejs_compat"]
+
+[assets]
+directory = "../web"
+binding = "ASSETS"
+run_worker_first = ["/api/*"]
+
+[vars]
+DEMO_ACCOUNT = "wrenchauditdemo1113.wrenchaudit1113.testnet"
+DEMO_PUBLIC_KEY = "ed25519:3FW656JSuV7BLz4KSYv9DBRMUE9NY6Bi8WLqoD5H7uj4"
+PAID_PER_IP_DAY = "6"
+PAID_PER_IP_10MIN = "3"
+PAID_GLOBAL_DAY = "200"
+CHEAP_PER_IP_MIN = "40"
+
+[[durable_objects.bindings]]
+name = "STATE"
+class_name = "WrenchState"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["WrenchState"]
+
+[triggers]
+crons = ["17 */2 * * *"]

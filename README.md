@@ -4,9 +4,14 @@ Wrench lets a NEAR account owner prove ownership with a NEP-413 signature, has a
 
 ## 60-second judge path
 
-1. `bash scripts/serve.sh` starts the app locally (the NEAR AI key is read from the local env file, never from the page).
-2. Open the printed local URL, enter a testnet account, sign the NEP-413 challenge, and read the dossier and its Verified attestation block.
-3. Try an account you do not own: the signature check refuses it.
+Live: https://near-wrench.earn-shield-alerts.workers.dev (NEAR testnet, no wallet needed)
+
+1. Press `Run the demo review`. Wrench signs a NEP-413 challenge for the testnet demo account `wrenchauditdemo1113.wrenchaudit1113.testnet`, checks that key against the account's FullAccess keys over RPC, has `Qwen/Qwen3.8-27B` on NEAR AI Cloud read the account inside a TEE, and verifies the TEE-signed receipt with the `check()` view of `sworn-reg7-1113.testnet`. The `On-chain result` block shows `ok:true`, the block it was read at, the registered key, and the request and response SHA-256.
+2. Type `near.testnet` under `Try an account you do not own`. The signature is cryptographically valid and Wrench refuses the account before any data is collected or any model is called.
+3. Press `Run a fresh model call` for a new TEE-signed completion and a new registry check.
+4. With your own wallet, `Connect and sign` runs the same review on your account, then quotes a confidential 1Click transfer. Run it locally with `bash scripts/serve.sh`.
+
+Hosted limits: per-visitor and daily caps on model calls keep the public URL within budget; over the cap the page shows the latest attested review and re-runs the on-chain check live.
 
 ## AI judges
 

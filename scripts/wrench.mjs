@@ -1,6 +1,4 @@
 import { createHash, createPublicKey, randomUUID, verify as verifySignature } from "node:crypto";
-import { spawnSync } from "node:child_process";
-import { readFile } from "node:fs/promises";
 
 export const MODEL = "Qwen/Qwen3.8-27B";
 export const REGISTRY = "sworn-reg7-1113.testnet";
@@ -60,9 +58,19 @@ export function proofBindsAccount(proof) {
   return Buffer.from(proof.payload.nonce, "base64").toString("hex") === match[2];
 }
 
+const RPC_URLS = { testnet: ["https://near-testnet.drpc.org", "https://test.rpc.fastnear.com"], mainnet: ["https://rpc.mainnet.fastnear.com"] };
+
 export async function rpc(network, method, params) {
-  const url = network === "testnet" ? "https://near-testnet.drpc.org" : "https://rpc.mainnet.fastnear.com";
-  const body = await jsonFetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: "wrench", method, params }) });
+  const urls = RPC_URLS[network];
+  let body;
+  for (const [index, url] of urls.entries()) {
+    try {
+      body = await jsonFetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: "wrench", method, params }) });
+      break;
+    } catch (error) {
+      if (index === urls.length - 1) throw error;
+    }
+  }
   if (body.error) throw new Error(`NEAR RPC ${body.error.message}: ${body.error.data ?? ""}`);
   return body.result;
 }
@@ -79,6 +87,7 @@ export async function verifyLinkedAddress(link, expectedMessage) {
   if (link.message !== expectedMessage) throw new Error(`${link.chain} signature challenge refused`);
   if (link.chain === "evm") {
     if (!/^0x[0-9a-fA-F]{40}$/.test(link.address)) throw new Error("invalid EVM address");
+    const { spawnSync } = await import("node:child_process");
     const checked = spawnSync("cast", ["wallet", "verify", "--quiet", "--address", link.address, expectedMessage, link.signature], { encoding: "utf8" });
     if (checked.status !== 0) throw new Error("EVM signature refused");
     const resolved = await jsonFetch(`https://api.ensideas.com/ens/resolve/${link.address}`);
@@ -112,6 +121,13 @@ async function jsonFetch(url, options = {}) {
   throw new Error(`${url} failed after retries`);
 }
 
+export function formatNear(yocto) {
+  const value = BigInt(yocto);
+  const whole = value / 10n ** 24n;
+  const fraction = (value % 10n ** 24n).toString().padStart(24, "0").slice(0, 4).replace(/0+$/, "");
+  return fraction ? `${whole}.${fraction}` : String(whole);
+}
+
 export async function collectPublicData(accountId, network = "mainnet", links = []) {
   const fastnear = network === "testnet" ? "https://test.api.fastnear.com" : "https://api.fastnear.com";
   const transactions = network === "testnet" ? "https://tx.test.fastnear.com/v0" : "https://tx.main.fastnear.com/v0";
@@ -138,7 +154,7 @@ export async function collectPublicData(accountId, network = "mainnet", links = 
     network,
     account_id: accountId,
     account_ownership: "NEP-413 FullAccess verified before collection",
-    balances: { near: rpcAccount.amount, staked_near: rpcAccount.locked, indexed: account.state?.balance },
+    balances: { near: rpcAccount.amount, staked_near: rpcAccount.locked, indexed: account.state?.balance, near_formatted: `${formatNear(rpcAccount.amount)} NEAR`, staked_near_formatted: `${formatNear(rpcAccount.locked)} NEAR`, unit: "raw fields are yoctoNEAR, 1 NEAR = 1e24; read the _formatted fields for amounts" },
     staking: account.pools ?? [],
     ft_holdings: account.tokens ?? [],
     mt_ft_holdings: [],
@@ -182,6 +198,7 @@ export async function requestAttestedDossier(bundle, apiKey, model = MODEL) {
     stream: false,
   }));
   const request = JSON.parse(requestBytes.toString("utf8"));
+  const clock = { start: Date.now() };
   const completionResponse = await fetch("https://cloud-api.near.ai/v1/chat/completions", {
     method: "POST", headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json", "accept-encoding": "identity", "x-no-aliasing": "true" },
     body: requestBytes, signal: AbortSignal.timeout(90000),
@@ -190,15 +207,19 @@ export async function requestAttestedDossier(bundle, apiKey, model = MODEL) {
   const responseBytes = Buffer.from(await completionResponse.arrayBuffer());
   const completion = JSON.parse(responseBytes.toString("utf8"));
   if (completion.model !== model) throw new Error(`NEAR AI returned model ${completion.model}, expected ${model}`);
+  clock.completion_ms = Date.now() - clock.start;
   const signatureUrl = `https://cloud-api.near.ai/v1/signature/${encodeURIComponent(completion.id)}?signing_algo=ed25519`;
   let receipt;
+  const receiptStart = Date.now();
   for (let i = 0; i < 10; i += 1) {
+    clock.receipt_attempts = i + 1;
     if (i) await new Promise(resolve => setTimeout(resolve, 1000));
     const response = await fetch(signatureUrl, { headers: { authorization: `Bearer ${apiKey}`, "accept-encoding": "identity" }, signal: AbortSignal.timeout(10000) });
     if (!response.ok) continue;
     const candidate = await response.json();
     if (candidate.signature) { receipt = candidate; break; }
   }
+  clock.receipt_ms = Date.now() - receiptStart;
   if (!receipt) throw new Error("NEAR AI provider TEE signature unavailable after 10 attempts");
   const reqHash = createHash("sha256").update(requestBytes).digest("hex");
   const resHash = createHash("sha256").update(responseBytes).digest("hex");
@@ -210,11 +231,12 @@ export async function requestAttestedDossier(bundle, apiKey, model = MODEL) {
   const verifier = createPublicKey({ key: Buffer.concat([Buffer.from("302a300506032b6570032100", "hex"), pub]), format: "der", type: "spki" });
   if (!verifySignature(null, Buffer.from(signedText), verifier, sig)) throw new Error("Sworn provider receipt signature invalid");
   if (registration.public_key !== receipt.signing_address.replace(/^0x/, "")) throw new Error("NEAR AI signing key does not match the Sworn registration");
+  const verdictBlock = {};
   const verdict = await view(REGISTRY, "check", {
     public_key: receipt.signing_address.replace(/^0x/, ""), model_id: model,
     request_sha256: reqHash, response_sha256: resHash, signature: receipt.signature.replace(/^0x/, ""),
     required_platform: null, required_app_id: null,
-  });
+  }, verdictBlock);
   if (!verdict.ok) throw new Error(`Sworn registry refused the response: ${verdict.reason ?? "unknown reason"}`);
   const content = completion.choices?.[0]?.message?.content;
   if (typeof content !== "string" || !content.trim()) {
@@ -223,11 +245,23 @@ export async function requestAttestedDossier(bundle, apiKey, model = MODEL) {
   }
   let dossier;
   try { dossier = JSON.parse(content); } catch { throw new Error("NEAR AI response is not valid JSON"); }
-  return { dossier, attestation: { registry: REGISTRY, model, registered_key: registration.public_key, registration, verdict, request_sha256: reqHash, response_sha256: resHash, signature: receipt.signature } };
+  return { dossier, attestation: { registry: REGISTRY, model, registered_key: registration.public_key, registration, verdict, verdict_block: verdictBlock, timings_ms: { completion: clock.completion_ms, receipt: clock.receipt_ms, receipt_attempts: clock.receipt_attempts }, request_sha256: reqHash, response_sha256: resHash, signature: receipt.signature } };
 }
 
-async function view(accountId, method, args) {
+export async function recheckReceipt(attestation) {
+  const verdictBlock = {};
+  const verdict = await view(attestation.registry, "check", {
+    public_key: attestation.registered_key, model_id: attestation.model,
+    request_sha256: attestation.request_sha256, response_sha256: attestation.response_sha256, signature: attestation.signature,
+    required_platform: null, required_app_id: null,
+  }, verdictBlock);
+  return { ...attestation, verdict, verdict_block: verdictBlock };
+}
+
+async function view(accountId, method, args, at = {}) {
   const result = await rpc("testnet", "query", { request_type: "call_function", account_id: accountId, method_name: method, args_base64: Buffer.from(JSON.stringify(args)).toString("base64"), finality: "final" });
+  at.block_height = result.block_height;
+  at.block_hash = result.block_hash;
   return JSON.parse(Buffer.from(result.result).toString("utf8"));
 }
 
@@ -244,6 +278,7 @@ export async function confidentialQuote({ recipient, refundTo = recipient, origi
 }
 
 export async function readJson(path) {
+  const { readFile } = await import("node:fs/promises");
   return JSON.parse(await readFile(path, "utf8"));
 }
 
