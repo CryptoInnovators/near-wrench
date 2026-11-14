@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash, createPrivateKey, createPublicKey, verify } from "node:crypto";
-import { confidentialQuote, decodeBase58, encodeFunctionCallTx, readJson, proofBindsAccount, sendFunctionCall, signedTxBase64, verifyNep413 } from "./wrench.mjs";
+import { confidentialQuote, decodeBase58, encodeBase58, encodeFunctionCallTx, readJson, proofBindsAccount, sendFunctionCall, signedTxBase64, verifyNep413 } from "./wrench.mjs";
 
 const fixture = await readJson(new URL("../fixtures/wrenchaudit1113/public-data.json", import.meta.url));
 assert.equal(fixture.network, "testnet");
@@ -42,9 +42,10 @@ const calls = [];
 const rpcStub = handler => { globalThis.fetch = async (url, options) => { const body = JSON.parse(options.body); calls.push(`${new URL(url).host} ${body.method}`); return handler(new URL(url).host, body); }; };
 const reply = (status, body) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 const sendArgs = { signerId: "a.testnet", publicKey: txArgs.publicKey, privateKey, receiverId: "sworn-reg7-1113.testnet", methodName: "verify", args: { k: 1 } };
-rpcStub((host, body) => host === "near-testnet.drpc.org" ? reply(429, { error: "limited" }) : reply(200, { jsonrpc: "2.0", id: 1, result: body.method === "query" ? { nonce: 5, block_hash: txArgs.blockHash } : { final: true } }));
-assert.deepEqual(await sendFunctionCall(sendArgs), { final: true }, "a rate limited first RPC falls over to the next testnet RPC");
+rpcStub((host, body) => host === "near-testnet.drpc.org" ? reply(429, { error: "limited" }) : reply(200, { jsonrpc: "2.0", id: 1, result: body.method === "query" ? { nonce: 5, block_hash: txArgs.blockHash } : body.method === "send_tx" ? { final_execution_status: "NONE" } : { final_execution_status: "FINAL", marker: true } }));
+assert.equal((await sendFunctionCall(sendArgs)).marker, true, "a rate limited first RPC falls over to the next testnet RPC and the final outcome is read by polling");
 assert.ok(calls.some(c => c.startsWith("archival-rpc.testnet.near.org send_tx")), "the transaction was broadcast through the fallback RPC");
+assert.equal(encodeBase58(Buffer.from([0, 0, 1])), "112", "base58 keeps leading zero bytes");
 calls.length = 0;
 rpcStub((host, body) => reply(200, { jsonrpc: "2.0", id: 1, ...(body.method === "query" ? { result: { nonce: 5, block_hash: txArgs.blockHash } } : { error: { message: "Invalid transaction: not enough balance", data: "" } }) }));
 await assert.rejects(sendFunctionCall(sendArgs), /not enough balance/, "a refused transaction is not retried");

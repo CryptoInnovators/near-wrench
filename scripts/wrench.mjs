@@ -19,6 +19,13 @@ export function decodeBase58(value) {
   return Buffer.concat([Buffer.alloc(zeroes), tail]);
 }
 
+export function encodeBase58(bytes) {
+  let n = BigInt("0x" + Buffer.from(bytes).toString("hex") || "0"), out = "";
+  while (n > 0n) { out = B58[Number(n % 58n)] + out; n /= 58n; }
+  for (const byte of bytes) { if (byte !== 0) break; out = `1${out}`; }
+  return out;
+}
+
 const borshString = value => {
   const bytes = Buffer.from(value, "utf8");
   const length = Buffer.alloc(4);
@@ -312,6 +319,23 @@ export function signedTxBase64(txBytes, privateKey) {
   return Buffer.concat([txBytes, Buffer.from([0]), signature]).toString("base64");
 }
 
+async function awaitFinal(network, txHash, signerId, timeoutMs = 45_000) {
+  const deadline = Date.now() + timeoutMs;
+  let last = "not yet included";
+  while (Date.now() < deadline) {
+    await sleep(450);
+    try {
+      const result = await rpc(network, "tx", { tx_hash: txHash, sender_account_id: signerId, wait_until: "NONE" });
+      if (result.final_execution_status === "FINAL") return result;
+      last = result.final_execution_status;
+    } catch (error) {
+      if (!/UNKNOWN_TRANSACTION|HANDLER_ERROR|has not been|Parse error|doesn't exist|does not exist|Server error/i.test(error.message) && !transient(error)) throw error;
+      last = error.message.slice(0, 80);
+    }
+  }
+  throw new Error(`Transaction ${txHash} was sent but did not finalize within ${timeoutMs / 1000} s (last status: ${last}). Check it on the explorer.`);
+}
+
 const lastNonce = new Map();
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -328,7 +352,8 @@ export async function sendFunctionCall({ network = "testnet", signerId, publicKe
     lastNonce.set(signerId, nonce);
     const tx = encodeFunctionCallTx({ signerId, publicKey, nonce, receiverId, blockHash: key.block_hash, methodName, args: JSON.stringify(args), gas, deposit });
     try {
-      return await rpc(network, "send_tx", { signed_tx_base64: signedTxBase64(tx, privateKey), wait_until: "FINAL" });
+      await rpc(network, "send_tx", { signed_tx_base64: signedTxBase64(tx, privateKey), wait_until: "NONE" });
+      return await awaitFinal(network, encodeBase58(createHash("sha256").update(tx).digest()), signerId);
     } catch (error) {
       failure = error;
       if (/InvalidNonce|nonce/i.test(error.message)) { lastNonce.delete(signerId); await sleep(150 + Math.floor(Math.random() * 350)); continue; }
