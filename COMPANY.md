@@ -9,10 +9,10 @@ NEAR account owners who want to see what their own wallet gives away, and want p
 ## How it works
 
 1. You sign one NEP-413 message (a fresh 32-byte nonce, five-minute window, one use). Wrench checks on NEAR RPC that the signing key is a FullAccess key of the account. An unowned account is refused before any data moves.
-2. Public account data (balance, recent transactions, counterparties) goes to `Qwen/Qwen3.8-27B` on NEAR AI Cloud, which runs inside a TEE. Your key and seed never leave your wallet.
+2. Public account data (balance, recent transactions, counterparties, access keys) goes to `Qwen/Qwen3.8-27B` on NEAR AI Cloud, which runs inside a TEE. Your key and seed never leave your wallet.
 3. The enclave signs request and response hashes. Wrench checks that signature against the key registered in `sworn-reg7-1113.testnet` with the `check()` view.
 4. Wrench sends `verify()` to the registry as a real testnet transaction. The registry logs the verdict. Only two hashes and a signature go on chain; the dossier text stays off chain.
-5. The dossier is released after the transaction returns `ok:true`. A receipt with one flipped bit comes back `ok:false` in its own transaction.
+5. The dossier is released after the transaction returns `ok:true`: a stamp with the transaction, the facts read from chain, and findings ranked by severity (an extra FullAccess key ranks high). A receipt with one flipped bit comes back `ok:false` in its own transaction.
 
 ## Evidence
 
