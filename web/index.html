@@ -69,7 +69,7 @@ h1 { margin: 0; font-size: clamp(44px, 5.2vw, 80px); line-height: 0.98; letter-s
 .trace { display: grid; gap: 0; }
 .band { padding: clamp(14px, 1.5vw, 20px) clamp(18px, 2.4vw, 32px); }
 .band header { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; flex-wrap: wrap; margin-bottom: 8px; }
-.big { margin: 0 0 6px; font-size: clamp(26px, 2.6vw, 38px); line-height: 1.05; letter-spacing: -0.035em; font-weight: 700; max-width: none; overflow-wrap: anywhere; }
+.big { margin: 0 0 6px; font-size: clamp(26px, 2.6vw, 38px); line-height: 1.05; letter-spacing: -0.025em; font-weight: 700; max-width: none; overflow-wrap: anywhere; }
 .band h2 { margin: 0; font-size: 22px; line-height: 1.1; letter-spacing: -0.03em; font-weight: 700; }
 .band .when { font-size: 15px; font-weight: 700; }
 .b-browser { background: var(--white); }
@@ -411,9 +411,9 @@ function renderChain() {
   }
   const tx = S.tx, ok = tx.verdict.ok;
   band.classList.add(ok ? "v-ok" : "v-no");
-  body.append(el("div", { class: "stampline" }, el("span", { class: "mark-ok", text: ok ? "Verified" : "Refused" }), el("span", { class: "big", style: "margin:0", text: ok ? "ok:true on NEAR testnet" : "ok:false on NEAR testnet" })));
+  body.append(el("div", { class: "stampline" }, el("span", { class: "mark-ok", text: ok ? "Verified" : "Refused" }), el("span", { class: "big", style: "margin:0", text: ok ? "Receipt accepted by the registry" : "Receipt refused by the registry" })));
   const gas = (Number(BigInt(tx.tokens_burnt_yocto) / 10n ** 18n) / 1e6).toFixed(4);
-  body.append(cells([["Result", ok ? "Match" : "No match"], ["Block", tx.block_height ?? "n/a"], ["Final in", seconds(tx.elapsed_ms)], ["Gas NEAR", gas]]));
+  body.append(cells([["Result", ok ? "ok:true" : "ok:false"], ["Block", tx.block_height ?? "n/a"], ["Final in", seconds(tx.elapsed_ms)], ["Gas NEAR", gas]]));
   body.append(el("p", {}, a(tx.explorer, `Open verify() tx ${short(tx.tx_hash, 8, 6)}`, { class: "txbtn", title: tx.tx_hash })));
   body.append(el("p", { class: "msgline", text: `${reg} holds the enclave's key and checked two hashes and a signature. Dossier text stays off chain.` }));
   $("when-chain").textContent = "";
