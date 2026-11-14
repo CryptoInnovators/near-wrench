@@ -1,6 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import { createHash, createPrivateKey, randomBytes, randomUUID, sign as signBytes } from "node:crypto";
-import { MODEL, collectPublicData, formatNear, confidentialQuote, decodeBase58, nep413Bytes, recheckReceipt, requestAttestedDossier, verifyAccountOwnership, verifyLinkedAddress, verifyNep413, verifyOnChain } from "../../scripts/wrench.mjs";
+import { MODEL, collectPublicData, formatNear, rpc, confidentialQuote, decodeBase58, nep413Bytes, recheckReceipt, requestAttestedDossier, verifyAccountOwnership, verifyLinkedAddress, verifyNep413, verifyOnChain } from "../../scripts/wrench.mjs";
 
 const CSP = "default-src 'self'; connect-src 'self' https:; frame-src https: blob: data:; img-src 'self' data: https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; script-src 'self' 'unsafe-inline' https://esm.sh; worker-src blob:; base-uri 'none'; frame-ancestors 'none'";
 const PKCS8_ED25519 = Buffer.from("302e020100300506032b657004220420", "hex");
@@ -180,10 +180,17 @@ async function route(request, env) {
     return json(200, { ok: true, demo_account: env.DEMO_ACCOUNT, paid_calls_today: await state.usage(), paid_calls_daily_cap: Number(env.PAID_GLOBAL_DAY), per_ip_daily_cap: Number(env.PAID_PER_IP_DAY) });
   }
 
+  if (method === "GET" && path === "/api/head") {
+    const gate_ = await gate(env, request, "cheap");
+    if (!gate_.ok) throw new HttpError(429, "Too many requests.", { retryAfter: gate_.retryAfter });
+    const block = await rpc("testnet", "block", { finality: "final" });
+    return json(200, { height: block.header.height, hash: block.header.hash, at: new Date().toISOString() });
+  }
+
   if (method === "GET" && path === "/api/last") {
     const last = await state.getLast();
     if (!last?.tx) return json(200, { last: null });
-    return json(200, { last: { at: last.at, demo_account: last.demo_account, ownership: last.ownership, enclave_sees: last.enclave_sees ?? null, proof: last.proof ?? null, attestation: { model: last.attestation.model, registry: last.attestation.registry, registered_key: last.attestation.registered_key, request_sha256: last.attestation.request_sha256, response_sha256: last.attestation.response_sha256, signature: last.attestation.signature, verdict: last.attestation.verdict, verdict_block: last.attestation.verdict_block }, tx: last.tx } });
+    return json(200, { last: { at: last.at, demo_account: last.demo_account, ownership: last.ownership, enclave_sees: last.enclave_sees ?? null, proof: last.proof ?? null, findings: (last.dossier?.three_links_that_leak_most ?? []).map(f => ({ link: f.link, severity: f.severity ?? null })), attestation: { model: last.attestation.model, registry: last.attestation.registry, registered_key: last.attestation.registered_key, request_sha256: last.attestation.request_sha256, response_sha256: last.attestation.response_sha256, signature: last.attestation.signature, verdict: last.attestation.verdict, verdict_block: last.attestation.verdict_block }, tx: last.tx } });
   }
 
   if (method === "POST" && path === "/api/demo") {
@@ -197,7 +204,7 @@ async function route(request, env) {
       if (!cheap.ok) throw new HttpError(429, "Too many requests. Wait a minute.", { retryAfter: cheap.retryAfter });
     } else if (paid.ok) fresh = true;
     else if (!last) throw new HttpError(429, `Demo budget reached (${paid.scope}). Try again in ${Math.ceil(paid.retryAfter / 60)} minutes.`, { retryAfter: paid.retryAfter });
-    else notice = `Fresh model calls are limited per visitor and per day. This run re-verifies the attested review from ${humanAge(Date.now() - Date.parse(last.at))} on chain.`;
+    else notice = `Re-verified the attested review from ${humanAge(Date.now() - Date.parse(last.at))} on chain.`;
     const txGate = await gate(env, request, "tx");
     if (!txGate.ok) throw new HttpError(429, `On-chain verification budget reached (${txGate.scope}). Try again in ${Math.ceil(txGate.retryAfter / 60)} minutes.`, { retryAfter: txGate.retryAfter });
     const proof = signDemoProof(env, env.DEMO_ACCOUNT);

@@ -39,6 +39,11 @@ button, input { font: inherit; color: inherit; }
 .pitch { grid-area: pitch; padding-top: 24px; }
 .points { grid-area: points; }
 .lead-m { display: none; font-size: 17px; }
+.found { margin: 0 0 8px; }
+.found-head { font-weight: 700; font-size: 20px; letter-spacing: -0.02em; margin: 0 0 8px !important; }
+.found ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.found li { display: flex; gap: 12px; align-items: baseline; }
+.found .sev { flex: none; min-width: 5.5em; text-align: center; }
 .ladder { list-style: none; margin: 24px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px 22px; font-weight: 700; }
 .ladder li { display: flex; align-items: center; gap: 8px; }
 .ladder i { width: 14px; height: 14px; background: #b4bac1; display: inline-block; }
@@ -175,13 +180,13 @@ footer .links { display: flex; gap: 12px 32px; flex-wrap: wrap; font-weight: 500
 <header class="bar">
   <a class="mark" href="#top">Wrench</a>
   <nav aria-label="Sections"><a href="#break">Break it</a><a href="#wallet">Your wallet</a><a href="#dossier">Dossier</a></nav>
-  <span class="net">NEAR testnet</span>
+  <span class="net" id="net">NEAR testnet</span>
 </header>
 <main id="top">
   <section class="hero" aria-labelledby="title">
     <div class="pitch">
       <h1 id="title">Audit your wallet privately.</h1>
-      <p class="lead">A model reads your wallet's history inside a sealed enclave. NEAR's Sworn registry checks its signed receipt in a real transaction before you see a word.</p>
+      <p class="lead">A model reads your wallet's history inside a sealed enclave (a TEE). NEAR's Sworn registry checks its signed receipt in a real transaction before you see a word.</p>
       <div class="actions">
         <button id="run" class="primary" type="button">Audit a demo wallet</button>
         <a class="alt" href="#wallet">Audit my own wallet</a>
@@ -190,7 +195,8 @@ footer .links { display: flex; gap: 12px 32px; flex-wrap: wrap; font-weight: 500
       <p id="status" class="status" role="status" aria-live="polite">Runs live on NEAR testnet in about 25 seconds.</p>
     </div>
     <div class="points">
-        <p class="lead-m">A model reads your wallet's history inside a sealed enclave. NEAR's Sworn registry checks its signed receipt in a real transaction before you see a word.</p>
+        <p class="lead-m">A model reads your wallet's history inside a sealed enclave (a TEE). NEAR's Sworn registry checks its signed receipt in a real transaction before you see a word.</p>
+        <div id="found" class="found" hidden><p class="found-head" id="found-head"></p><ul id="found-list"></ul></div>
         <p><strong>Private by construction.</strong> Only public account data enters the enclave. Your key stays in your wallet.</p>
         <p><strong>Checked on chain.</strong> The enclave's signature must match the key the registry holds, in a transaction anyone can open.</p>
         <p><strong>Refuses what it cannot prove.</strong> An account you do not own, or a receipt with one flipped bit, stops cold.</p>
@@ -383,7 +389,17 @@ function renderLadder() {
   for (const li of $("ladder").children) { const k = li.dataset.step; li.className = done[k] ? "done" : S.running && k === first ? "active" : ""; }
 }
 
-function renderAll() { renderBrowser(); renderEnclave(); renderChain(); renderLadder(); }
+function renderFound(findings, head) {
+  const box = $("found"), list = $("found-list");
+  list.replaceChildren();
+  const rows = (findings || []).filter(f => f.link);
+  box.hidden = !rows.length;
+  if (!rows.length) return;
+  $("found-head").textContent = head;
+  for (const f of rows) { const sev = ["high", "medium", "low"].includes(String(f.severity).toLowerCase()) ? String(f.severity).toLowerCase() : ""; list.append(el("li", {}, sev ? el("span", { class: `sev ${sev}`, text: sev }) : null, el("span", { text: String(f.link).replaceAll("`", "") }))); }
+}
+
+function renderAll() { renderBrowser(); renderEnclave(); renderChain(); renderLadder(); if (S.running) renderFound(null); }
 
 function setStatus(text, kind = "", action) {
   const node = $("status"); node.className = `status ${kind}`; node.replaceChildren(document.createTextNode(text));
@@ -434,9 +450,11 @@ async function streamReview(url, body, { mode, network, onDone, retry }) {
     if (!done) throw new Error("The review stream ended before the chain answered.");
     S.running = false; clearInterval(timer);
     renderAll(); renderDossier();
+    renderFound(S.dossier?.dossier?.three_links_that_leak_most, "Found in this run");
     setStatus(`${S.tx?.verdict?.ok ? "Verified on NEAR testnet" : "Receipt refused on chain"} in ${seconds(done.total_ms)}${done.notice ? `. ${done.notice}` : ""}`, "", { label: "Read the dossier", run: () => $("dossier").scrollIntoView() });
     if (S.tx) { $("status").append(document.createTextNode("  "), a(S.tx.explorer, `verify() tx ${short(S.tx.tx_hash, 8, 6)}`)); }
     if (onDone) onDone(done);
+    if (S.tx?.verdict?.ok && window.scrollY < 200) setTimeout(() => { if (window.scrollY < 200) $("dossier").scrollIntoView({ behavior: "smooth" }); }, 1800);
     return done;
   } catch (error) {
     S.running = false; clearInterval(timer); renderAll();
@@ -494,13 +512,17 @@ async function loadLast() {
     S.lastAt = last.at; S.proof = last.proof; S.owner = last.ownership; S.seen = last.enclave_sees; S.check = { verdict: last.attestation.verdict, block: last.attestation.verdict_block };
     S.enclave = { ...last.attestation, replayed: true, at: last.at, registry: last.attestation.registry }; S.tx = last.tx;
     if (!S.proof || !S.seen) { S = emptyState(); renderAll(); return; }
-    renderAll();
+    renderAll(); renderFound(last.findings, "Found in the last run");
     for (const id of ["browser", "enclave", "chain"]) $(`when-${id}`).textContent = `Last run ${ageText(last.at)}`;
     setStatus(`Last verified ${ageText(last.at)} at block ${last.tx.block_height}. Press the button to run it live, about 25 seconds.`);
     $("status").append(document.createTextNode("  "), a(last.tx.explorer, `verify() tx ${short(last.tx.tx_hash, 8, 6)}`));
   } catch { renderAll(); }
 }
 renderAll(); loadLast();
+async function tickHead() {
+  try { const res = await fetch("/api/head", { headers: headers() }); if (!res.ok) return; const h = await res.json(); $("net").textContent = `NEAR testnet, block ${h.height.toLocaleString("en-US")}`; } catch { /* the pill keeps its last value */ }
+}
+tickHead(); setInterval(tickHead, 15000);
 
 // ---- break it ----
 function refusedBlock(title, lines) { return el("div", { class: "refused" }, el("strong", { text: title }), ...lines.map(l => el("div", {}, l))); }
