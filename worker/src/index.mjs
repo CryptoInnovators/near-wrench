@@ -2,7 +2,7 @@ import { DurableObject } from "cloudflare:workers";
 import { createHash, createPrivateKey, randomBytes, randomUUID, sign as signBytes } from "node:crypto";
 import { MODEL, collectPublicData, formatNear, confidentialQuote, decodeBase58, nep413Bytes, recheckReceipt, requestAttestedDossier, verifyAccountOwnership, verifyLinkedAddress, verifyNep413, verifyOnChain } from "../../scripts/wrench.mjs";
 
-const CSP = "default-src 'self'; connect-src 'self' https://esm.sh https://rpc.mainnet.fastnear.com https://helper.mainnet.near.org https://app.mynearwallet.com https://api.mynearwallet.com; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self' 'unsafe-inline' https://esm.sh; base-uri 'none'; frame-ancestors 'none'";
+const CSP = "default-src 'self'; connect-src 'self' https:; frame-src https: blob: data:; img-src 'self' data: https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; script-src 'self' 'unsafe-inline' https://esm.sh; worker-src blob:; base-uri 'none'; frame-ancestors 'none'";
 const PKCS8_ED25519 = Buffer.from("302e020100300506032b657004220420", "hex");
 const pad = n => String(n).padStart(15, "0");
 
