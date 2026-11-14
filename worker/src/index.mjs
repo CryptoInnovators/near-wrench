@@ -1,25 +1,31 @@
 import { DurableObject } from "cloudflare:workers";
 import { createHash, createPrivateKey, randomBytes, randomUUID, sign as signBytes } from "node:crypto";
-import { collectPublicData, confidentialQuote, decodeBase58, nep413Bytes, recheckReceipt, requestAttestedDossier, verifyAccountOwnership, verifyLinkedAddress, verifyNep413 } from "../../scripts/wrench.mjs";
+import { MODEL, collectPublicData, formatNear, confidentialQuote, decodeBase58, nep413Bytes, recheckReceipt, requestAttestedDossier, verifyAccountOwnership, verifyLinkedAddress, verifyNep413, verifyOnChain } from "../../scripts/wrench.mjs";
 
 const CSP = "default-src 'self'; connect-src 'self' https://esm.sh https://rpc.mainnet.fastnear.com https://helper.mainnet.near.org https://app.mynearwallet.com https://api.mynearwallet.com; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self' 'unsafe-inline' https://esm.sh; base-uri 'none'; frame-ancestors 'none'";
 const PKCS8_ED25519 = Buffer.from("302e020100300506032b657004220420", "hex");
 const pad = n => String(n).padStart(15, "0");
 
 export class WrenchState extends DurableObject {
-  async limit(ipHash, paid, caps) {
+  async limit(kind, ipHash, visitor, caps) {
     const now = Date.now();
     const day = Math.floor(now / 86_400_000), tenMin = Math.floor(now / 600_000), minute = Math.floor(now / 60_000);
-    const windows = paid
-      ? [[`ipd:${ipHash}:${day}`, caps.ipDay, (day + 1) * 86_400_000], [`ip10:${ipHash}:${tenMin}`, caps.ip10, (tenMin + 1) * 600_000], [`gd:${day}`, caps.globalDay, (day + 1) * 86_400_000]]
-      : [[`ipm:${ipHash}:${minute}`, caps.cheapMin, (minute + 1) * 60_000]];
+    const dayEnd = (day + 1) * 86_400_000;
+    const table = {
+      cheap: { visitor: null, soft: [[`ipm:${ipHash}:${minute}`, caps.cheapMin, (minute + 1) * 60_000]], hard: [] },
+      paid: { visitor: [`vp:${visitor}:${day}`, caps.visitorPaidDay, dayEnd], soft: [[`ipd:${ipHash}:${day}`, caps.ipDay, dayEnd], [`ip10:${ipHash}:${tenMin}`, caps.ip10, (tenMin + 1) * 600_000]], hard: [[`gd:${day}`, caps.globalDay, dayEnd]] },
+      tx: { visitor: [`vt:${visitor}:${day}`, caps.visitorTxDay, dayEnd], soft: [[`ipt:${ipHash}:${day}`, caps.ipTxDay, dayEnd]], hard: [[`gt:${day}`, caps.globalTxDay, dayEnd]] },
+    }[kind];
+    const visitorCount = table.visitor ? ((await this.ctx.storage.get(`c:${table.visitor[0]}`))?.n ?? 0) : 1;
+    const firstRun = table.visitor && visitorCount === 0;
+    const windows = [...(table.visitor ? [[...table.visitor, "visitor"]] : []), ...(firstRun ? [] : table.soft.map(w => [...w, "ip"])), ...table.hard.map(w => [...w, "global"])];
     const counts = await Promise.all(windows.map(([key]) => this.ctx.storage.get(`c:${key}`)));
-    for (const [i, [key, cap, resetAt]] of windows.entries()) {
-      if ((counts[i]?.n ?? 0) >= cap) return { ok: false, scope: key.startsWith("gd:") ? "global" : "ip", retryAfter: Math.ceil((resetAt - now) / 1000) };
+    for (const [i, [, cap, resetAt, scope]] of windows.entries()) {
+      if ((counts[i]?.n ?? 0) >= cap) return { ok: false, scope, retryAfter: Math.ceil((resetAt - now) / 1000) };
     }
     await Promise.all(windows.map(([key, , resetAt], i) => this.ctx.storage.put(`c:${key}`, { n: (counts[i]?.n ?? 0) + 1, expires: resetAt })));
     if (!(await this.ctx.storage.getAlarm())) await this.ctx.storage.setAlarm(now + 3_600_000);
-    return { ok: true, globalToday: (counts[windows.length - 1]?.n ?? 0) + 1 };
+    return { ok: true, firstRun: Boolean(firstRun) };
   }
   async alarm() {
     const now = Date.now();
@@ -104,11 +110,38 @@ async function freshDemo(env, state) {
   return out;
 }
 
-async function gate(env, request, paid) {
+async function gate(env, request, kind) {
   const ip = request.headers.get("cf-connecting-ip") ?? "unknown";
   const ipHash = createHash("sha256").update(`wrench:${ip}`).digest("hex").slice(0, 16);
-  const caps = { ipDay: Number(env.PAID_PER_IP_DAY), ip10: Number(env.PAID_PER_IP_10MIN), globalDay: Number(env.PAID_GLOBAL_DAY), cheapMin: Number(env.CHEAP_PER_IP_MIN) };
-  return env.STATE.getByName("wrench").limit(ipHash, paid, caps);
+  const token = request.headers.get("x-wrench-visitor") ?? "";
+  const visitor = /^[0-9a-f-]{16,64}$/.test(token) ? token : `ip-${ipHash}`;
+  const caps = {
+    ipDay: Number(env.PAID_PER_IP_DAY), ip10: Number(env.PAID_PER_IP_10MIN), globalDay: Number(env.PAID_GLOBAL_DAY), cheapMin: Number(env.CHEAP_PER_IP_MIN),
+    visitorPaidDay: Number(env.PAID_PER_VISITOR_DAY), visitorTxDay: Number(env.TX_PER_VISITOR_DAY), ipTxDay: Number(env.TX_PER_IP_DAY), globalTxDay: Number(env.TX_GLOBAL_DAY),
+  };
+  return env.STATE.getByName("wrench").limit(kind, ipHash, visitor, caps);
+}
+
+function ndjson(run) {
+  const { readable, writable } = new TransformStream();
+  const writer = writable.getWriter(), encoder = new TextEncoder();
+  const emit = value => writer.write(encoder.encode(`${JSON.stringify(value)}\n`));
+  (async () => {
+    try { await run(emit); } catch (error) { await emit({ stage: "error", status: error.status ?? 502, error: error.message }).catch(() => {}); }
+    finally { await writer.close().catch(() => {}); }
+  })();
+  return new Response(readable, { headers: { "content-type": "application/x-ndjson; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff" } });
+}
+
+const enclaveSees = bundle => ({
+  account_id: bundle.account_id, balance: bundle.balances.near_formatted, staked: bundle.balances.staked_near_formatted,
+  token_holdings: bundle.ft_holdings.length, staking_pools: bundle.staking.length, transactions: bundle.recent_transactions.length,
+  counterparties: bundle.top_counterparties, subaccounts_created: bundle.named_subaccounts_created.length,
+  social_profile: Boolean(bundle.near_social_profile && Object.keys(bundle.near_social_profile).length), sources: bundle.sources,
+});
+
+function demoKey(env) {
+  return { signerId: env.DEMO_ACCOUNT, publicKey: env.DEMO_PUBLIC_KEY, privateKey: demoSigner(env) };
 }
 
 async function route(request, env) {
@@ -124,23 +157,59 @@ async function route(request, env) {
   if (method === "POST" && path === "/api/demo") {
     const input = await bodyJson(request);
     const last = await state.getLast();
-    const ageMs = last ? Date.now() - Date.parse(last.at) : Infinity;
-    const replay = async notice => json(200, { ...last, replayed: true, age_seconds: Math.round(ageMs / 1000), attestation: await recheckReceipt(last.attestation), notice });
-    if (!input.fresh && ageMs < REPLAY_MAX_AGE_MS) {
-      const cheap = await gate(env, request, false);
+    let fresh = false, notice = "";
+    const replayOnly = input.fresh === false && last;
+    const paid = replayOnly ? { ok: false, replayOnly: true } : await gate(env, request, "paid");
+    if (replayOnly) {
+      const cheap = await gate(env, request, "cheap");
       if (!cheap.ok) throw new HttpError(429, "Too many requests. Wait a minute.", { retryAfter: cheap.retryAfter });
-      return replay(`Attested review from ${humanAge(ageMs)}. The registry check below ran just now.`);
-    }
-    const verdict = await gate(env, request, true);
-    if (!verdict.ok) {
-      if (!last) throw new HttpError(429, `Demo budget reached (${verdict.scope}). Try again in ${Math.ceil(verdict.retryAfter / 60)} minutes.`, { retryAfter: verdict.retryAfter });
-      return replay(`Fresh model calls are limited per visitor and per day. Showing the attested review from ${humanAge(ageMs)}; the registry check below ran just now.`);
-    }
-    return json(200, await freshDemo(env, state));
+    } else if (paid.ok) fresh = true;
+    else if (!last) throw new HttpError(429, `Demo budget reached (${paid.scope}). Try again in ${Math.ceil(paid.retryAfter / 60)} minutes.`, { retryAfter: paid.retryAfter });
+    else notice = `Fresh model calls are limited per visitor and per day. This run re-verifies the attested review from ${humanAge(Date.now() - Date.parse(last.at))} on chain.`;
+    const txGate = await gate(env, request, "tx");
+    if (!txGate.ok) throw new HttpError(429, `On-chain verification budget reached (${txGate.scope}). Try again in ${Math.ceil(txGate.retryAfter / 60)} minutes.`, { retryAfter: txGate.retryAfter });
+    return ndjson(async emit => {
+      const t0 = Date.now();
+      const proof = signDemoProof(env, env.DEMO_ACCOUNT);
+      await emit({ stage: "sign", proof: { account_id: proof.accountId, public_key: proof.publicKey, message: proof.payload.message, recipient: proof.payload.recipient, nonce: proof.payload.nonce, signature: proof.signature }, at_ms: Date.now() - t0 });
+      const owner = await verifyAccountOwnership(proof, "testnet");
+      await emit({ stage: "owner", ownership: owner, at_ms: Date.now() - t0 });
+      let dossier, attestation, evidence, at;
+      if (fresh) {
+        const bundle = await collectPublicData(proof.accountId, "testnet", []);
+        bundle.ownership = owner;
+        await emit({ stage: "collect", enclave_sees: enclaveSees(bundle), at_ms: Date.now() - t0 });
+        const result = await requestAttestedDossier(bundle, env.NEAR_AI_API_KEY, MODEL, async event => emit({ ...event, at_ms: Date.now() - t0 }));
+        dossier = result.dossier; attestation = result.attestation; at = new Date().toISOString();
+        evidence = { network: "testnet", collected_at: bundle.collected_at, balance_yocto: bundle.balances.near, recent_transactions: bundle.recent_transactions.length, top_counterparties: bundle.top_counterparties, sources: bundle.sources, timings_ms: { ownership: 0, collect: 0, model_and_registry: attestation.timings_ms.completion + attestation.timings_ms.receipt } };
+        await state.saveLast({ at, network: "testnet", demo_account: env.DEMO_ACCOUNT, ownership: owner, evidence, dossier, attestation });
+      } else {
+        ({ dossier, evidence, at } = last);
+        await emit({ stage: "collect", replayed: true, enclave_sees: { account_id: last.demo_account, balance: `${formatNear(evidence.balance_yocto)} NEAR`, transactions: evidence.recent_transactions, counterparties: evidence.top_counterparties, sources: evidence.sources }, at_ms: Date.now() - t0 });
+        await emit({ stage: "enclave", replayed: true, model: last.attestation.model, registry: last.attestation.registry, registered_key: last.attestation.registered_key, request_sha256: last.attestation.request_sha256, response_sha256: last.attestation.response_sha256, signature: last.attestation.signature, at, at_ms: Date.now() - t0 });
+        attestation = await recheckReceipt(last.attestation);
+        await emit({ stage: "check", verdict: attestation.verdict, block: attestation.verdict_block, at_ms: Date.now() - t0 });
+      }
+      const tx = await verifyOnChain({ attestation, ...demoKey(env) });
+      await emit({ stage: "tx", tx, at_ms: Date.now() - t0 });
+      await emit({ stage: "dossier", dossier, evidence, attestation: { ...attestation, signature: undefined }, at, at_ms: Date.now() - t0 });
+      await emit({ stage: "done", fresh, notice, total_ms: Date.now() - t0 });
+    });
+  }
+
+  if (method === "POST" && path === "/api/tamper") {
+    const last = await state.getLast();
+    if (!last) throw new HttpError(409, "No attested review exists yet. Run the review first.");
+    const txGate = await gate(env, request, "tx");
+    if (!txGate.ok) throw new HttpError(429, `On-chain verification budget reached (${txGate.scope}). Try again in ${Math.ceil(txGate.retryAfter / 60)} minutes.`, { retryAfter: txGate.retryAfter });
+    const original = last.attestation.response_sha256;
+    const flipped = (original[0] === "0" ? "1" : "0") + original.slice(1);
+    const tx = await verifyOnChain({ attestation: { ...last.attestation, response_sha256: flipped }, ...demoKey(env) });
+    return json(200, { tx, tampered: { field: "response_sha256", original, submitted: flipped } });
   }
 
   if (method === "POST" && path === "/api/demo-unowned") {
-    const verdict = await gate(env, request, false);
+    const verdict = await gate(env, request, "cheap");
     if (!verdict.ok) throw new HttpError(429, "Too many requests. Wait a minute.", { retryAfter: verdict.retryAfter });
     const input = await bodyJson(request);
     const target = String(input.accountId ?? "").trim();
@@ -158,7 +227,7 @@ async function route(request, env) {
   }
 
   if (method === "GET" && path === "/api/challenge") {
-    const verdict = await gate(env, request, false);
+    const verdict = await gate(env, request, "cheap");
     if (!verdict.ok) throw new HttpError(429, "Too many requests. Wait a minute.", { retryAfter: verdict.retryAfter });
     const id = url.searchParams.get("accountId");
     if (!accountId(id)) throw new HttpError(400, "Enter a valid NEAR account ID.");
@@ -170,7 +239,7 @@ async function route(request, env) {
   }
 
   if (method === "POST" && path === "/api/dossier") {
-    const verdict = await gate(env, request, true);
+    const verdict = await gate(env, request, "paid");
     if (!verdict.ok) throw new HttpError(429, `Review budget reached (${verdict.scope}). Try again in ${Math.ceil(verdict.retryAfter / 60)} minutes, or run the no-wallet demo.`, { retryAfter: verdict.retryAfter });
     const input = await bodyJson(request);
     const challenge = await state.takeChallenge(input.challengeId);
@@ -209,7 +278,7 @@ async function route(request, env) {
   }
 
   if (method === "POST" && path === "/api/quote") {
-    const verdict = await gate(env, request, false);
+    const verdict = await gate(env, request, "cheap");
     if (!verdict.ok) throw new HttpError(429, "Too many requests. Wait a minute.", { retryAfter: verdict.retryAfter });
     const input = await bodyJson(request);
     const session = await state.getSession(input.session);
@@ -229,8 +298,8 @@ async function route(request, env) {
 export default {
   async scheduled(controller, env) {
     const state = env.STATE.getByName("wrench");
-    const caps = { ipDay: 1e9, ip10: 1e9, globalDay: Number(env.PAID_GLOBAL_DAY), cheapMin: 1e9 };
-    if (!(await state.limit("cron", true, caps)).ok) return;
+    const caps = { ipDay: 1e9, ip10: 1e9, globalDay: Number(env.PAID_GLOBAL_DAY), cheapMin: 1e9, visitorPaidDay: 1e9 };
+    if (!(await state.limit("paid", "cron", "cron", caps)).ok) return;
     await freshDemo(env, state);
   },
   async fetch(request, env) {

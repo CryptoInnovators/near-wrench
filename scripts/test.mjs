@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { confidentialQuote, readJson, proofBindsAccount, verifyNep413 } from "./wrench.mjs";
+import { createHash, createPrivateKey, createPublicKey, verify } from "node:crypto";
+import { confidentialQuote, decodeBase58, encodeFunctionCallTx, readJson, proofBindsAccount, signedTxBase64, verifyNep413 } from "./wrench.mjs";
 
 const fixture = await readJson(new URL("../fixtures/wrenchaudit1113/public-data.json", import.meta.url));
 assert.equal(fixture.network, "testnet");
@@ -18,6 +19,25 @@ assert.equal(proofBindsAccount({ ...fixture.proof, accountId: "somebodyelse.test
 assert.equal(fixture.sources.nearblocks.staking_txns.length, 0, "the captured account has no indexed staking history");
 await assert.rejects(confidentialQuote({ recipient: fixture.account_id, originAsset: "nep141:wrap.near", amount: "1" }), /user-session token required/, "confidential quote refuses to call 1Click without user ownership auth");
 
+const seed = Buffer.alloc(32, 7);
+const privateKey = createPrivateKey({ key: Buffer.concat([Buffer.from("302e020100300506032b657004220420", "hex"), seed]), format: "der", type: "pkcs8" });
+const spki = createPublicKey(privateKey).export({ format: "der", type: "spki" }).subarray(-32);
+const B58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+const b58 = bytes => { let n = BigInt("0x" + Buffer.from(bytes).toString("hex")), out = ""; while (n > 0n) { out = B58[Number(n % 58n)] + out; n /= 58n; } return out; };
+const txArgs = { signerId: "a.testnet", publicKey: `ed25519:${b58(spki)}`, nonce: 41, receiverId: "sworn-reg7-1113.testnet", blockHash: b58(Buffer.alloc(32, 9)), methodName: "verify", args: JSON.stringify({ k: 1 }), gas: 30_000_000_000_000n };
+const txBytes = encodeFunctionCallTx(txArgs);
+let at = 0; const takeString = () => { const n = txBytes.readUInt32LE(at); at += 4; const v = txBytes.subarray(at, at + n).toString(); at += n; return v; };
+assert.equal(takeString(), "a.testnet"); assert.equal(txBytes[at++], 0); assert.deepEqual(txBytes.subarray(at, at + 32), spki); at += 32;
+assert.equal(txBytes.readBigUInt64LE(at), 41n); at += 8; assert.equal(takeString(), "sworn-reg7-1113.testnet"); assert.deepEqual(decodeBase58(b58(Buffer.alloc(32, 9))), Buffer.alloc(32, 9)); at += 32;
+assert.equal(txBytes.readUInt32LE(at), 1); at += 4; assert.equal(txBytes[at++], 2, "FunctionCall action tag"); assert.equal(takeString(), "verify"); const argLen = txBytes.readUInt32LE(at); at += 4 + argLen;
+assert.equal(txBytes.readBigUInt64LE(at), 30_000_000_000_000n); at += 8; assert.equal(txBytes.readBigUInt64LE(at), 0n); at += 16; assert.equal(at, txBytes.length, "no trailing bytes");
+const signedTx = Buffer.from(signedTxBase64(txBytes, privateKey), "base64");
+const txKey = createPublicKey({ key: Buffer.concat([Buffer.from("302a300506032b6570032100", "hex"), spki]), format: "der", type: "spki" });
+assert.equal(verify(null, createHash("sha256").update(txBytes).digest(), txKey, signedTx.subarray(-64)), true, "transaction signature verifies over sha256(tx)");
+const changed = Buffer.from(txBytes); changed[changed.length - 20] ^= 1;
+assert.equal(verify(null, createHash("sha256").update(changed).digest(), txKey, signedTx.subarray(-64)), false, "a changed transaction does not verify under the same signature");
+
+console.log("PASS NEAR FunctionCall transaction encoding and signature");
 console.log(`PASS recorded public data: ${fixture.sources.nearblocks.txns.length} transaction, ${fixture.sources.nearblocks.ft_txns.length} FT transfer, ${fixture.sources.nearblocks.staking_txns.length} staking event`);
 console.log("PASS NEP-413 signature, account binding, and forged-signature refusal");
 console.log("PASS unowned-address negative fixture has a valid, account-bound signature");

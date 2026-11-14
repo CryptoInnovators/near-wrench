@@ -1,4 +1,4 @@
-import { createHash, createPublicKey, randomUUID, verify as verifySignature } from "node:crypto";
+import { createHash, createPublicKey, randomUUID, sign as signBytes, verify as verifySignature } from "node:crypto";
 
 export const MODEL = "Qwen/Qwen3.8-27B";
 export const REGISTRY = "sworn-reg7-1113.testnet";
@@ -179,7 +179,7 @@ export function dossierPrompt(bundle) {
   return `You are conducting a defensive exposure review for the verified owner of this account. Use only evidence in the JSON. Treat account-to-person and location links as hypotheses, state uncertainty, and never invent a real-world identity, street address, home, or attack instructions. Estimate net worth only as a broad range from visible balances and mark missing prices. Return one JSON object with keys: summary, estimated_net_worth (range, currency, confidence, basis), linked_identities (array with identity, evidence_ids, confidence), likely_location_signals (array with signal, evidence_ids, confidence, caveat), three_links_that_leak_most (exactly three items, each with link, evidence_ids, why_it_matters, safe_action), and uncertainty. Every evidence_ids value must point to a source path in the supplied JSON. Do not give instructions for stalking, coercion, entry, physical attack, or account compromise. If evidence is insufficient, say so in the JSON.\n\n${JSON.stringify(bundle)}`;
 }
 
-export async function requestAttestedDossier(bundle, apiKey, model = MODEL) {
+export async function requestAttestedDossier(bundle, apiKey, model = MODEL, onStage = () => {}) {
   if (!apiKey) throw new Error("NEAR_AI_API_KEY missing");
   const registration = await view(REGISTRY, "get_latest", { model_id: model });
   if (!registration) throw new Error(`Sworn registration not found for model ${model}`);
@@ -231,12 +231,15 @@ export async function requestAttestedDossier(bundle, apiKey, model = MODEL) {
   const verifier = createPublicKey({ key: Buffer.concat([Buffer.from("302a300506032b6570032100", "hex"), pub]), format: "der", type: "spki" });
   if (!verifySignature(null, Buffer.from(signedText), verifier, sig)) throw new Error("Sworn provider receipt signature invalid");
   if (registration.public_key !== receipt.signing_address.replace(/^0x/, "")) throw new Error("NEAR AI signing key does not match the Sworn registration");
+  const receiptView = { model, registry: REGISTRY, registered_key: registration.public_key, request_sha256: reqHash, response_sha256: resHash, signature: receipt.signature, request_bytes: requestBytes.length, response_bytes: responseBytes.length, timings_ms: { completion: clock.completion_ms, receipt: clock.receipt_ms } };
+  await onStage({ stage: "enclave", ...receiptView });
   const verdictBlock = {};
   const verdict = await view(REGISTRY, "check", {
     public_key: receipt.signing_address.replace(/^0x/, ""), model_id: model,
     request_sha256: reqHash, response_sha256: resHash, signature: receipt.signature.replace(/^0x/, ""),
     required_platform: null, required_app_id: null,
   }, verdictBlock);
+  await onStage({ stage: "check", verdict, block: verdictBlock });
   if (!verdict.ok) throw new Error(`Sworn registry refused the response: ${verdict.reason ?? "unknown reason"}`);
   const content = completion.choices?.[0]?.message?.content;
   if (typeof content !== "string" || !content.trim()) {
@@ -284,4 +287,72 @@ export async function readJson(path) {
 
 export async function mainnetOwnership(proof) {
   return verifyAccountOwnership(proof, "mainnet");
+}
+
+const u64 = n => { const b = Buffer.alloc(8); b.writeBigUInt64LE(BigInt(n)); return b; };
+const u128 = n => { const b = Buffer.alloc(16); b.writeBigUInt64LE(BigInt(n) & 0xffffffffffffffffn); b.writeBigUInt64LE(BigInt(n) >> 64n, 8); return b; };
+const u32 = n => { const b = Buffer.alloc(4); b.writeUInt32LE(n); return b; };
+
+export function encodeFunctionCallTx({ signerId, publicKey, nonce, receiverId, blockHash, methodName, args, gas, deposit = 0n }) {
+  const key = decodeBase58(publicKey.replace(/^ed25519:/, ""));
+  const hash = decodeBase58(blockHash);
+  if (key.length !== 32 || hash.length !== 32) throw new Error("transaction key or block hash has the wrong length");
+  const argBytes = Buffer.from(args);
+  return Buffer.concat([
+    borshString(signerId), Buffer.from([0]), key, u64(nonce), borshString(receiverId), hash,
+    u32(1), Buffer.from([2]), borshString(methodName), u32(argBytes.length), argBytes, u64(gas), u128(deposit),
+  ]);
+}
+
+export function signedTxBase64(txBytes, privateKey) {
+  const signature = signBytes(null, createHash("sha256").update(txBytes).digest(), privateKey);
+  return Buffer.concat([txBytes, Buffer.from([0]), signature]).toString("base64");
+}
+
+const lastNonce = new Map();
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+export async function sendFunctionCall({ network = "testnet", signerId, publicKey, privateKey, receiverId, methodName, args, gas = 30_000_000_000_000n, deposit = 0n }) {
+  let failure;
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const key = await rpc(network, "query", { request_type: "view_access_key", finality: "final", account_id: signerId, public_key: publicKey });
+    const nonce = Math.max(Number(key.nonce), lastNonce.get(signerId) ?? 0) + 1;
+    lastNonce.set(signerId, nonce);
+    const tx = encodeFunctionCallTx({ signerId, publicKey, nonce, receiverId, blockHash: key.block_hash, methodName, args: JSON.stringify(args), gas, deposit });
+    try {
+      return await rpc(network, "send_tx", { signed_tx_base64: signedTxBase64(tx, privateKey), wait_until: "FINAL" });
+    } catch (error) {
+      failure = error;
+      if (!/InvalidNonce|nonce/i.test(error.message)) throw error;
+      lastNonce.delete(signerId);
+      await sleep(150 + Math.floor(Math.random() * 350));
+    }
+  }
+  throw failure;
+}
+
+export const txUrl = (network, hash) => `https://${network === "testnet" ? "testnet." : ""}nearblocks.io/txns/${hash}`;
+
+export async function verifyOnChain({ attestation, signerId, publicKey, privateKey, network = "testnet" }) {
+  const started = Date.now();
+  const outcome = await sendFunctionCall({
+    network, signerId, publicKey, privateKey, receiverId: attestation.registry, methodName: "verify",
+    args: {
+      public_key: attestation.registered_key, model_id: attestation.model, request_sha256: attestation.request_sha256,
+      response_sha256: attestation.response_sha256, signature: attestation.signature.replace(/^0x/, ""), required_platform: null, required_app_id: null,
+    },
+  });
+  if (outcome.status?.Failure) throw new Error(`Sworn verify transaction failed: ${JSON.stringify(outcome.status.Failure).slice(0, 300)}`);
+  const verdict = JSON.parse(Buffer.from(outcome.status.SuccessValue ?? "", "base64").toString("utf8") || "null");
+  const logs = outcome.receipts_outcome.flatMap(r => r.outcome.logs);
+  const event = logs.map(l => l.replace(/^EVENT_JSON:/, "")).map(l => { try { return JSON.parse(l); } catch { return null; } }).find(e => e?.event === "verify") ?? null;
+  const lastReceipt = outcome.receipts_outcome.at(-1);
+  const block = await rpc(network, "block", { block_id: lastReceipt.block_hash }).catch(() => null);
+  return {
+    tx_hash: outcome.transaction.hash, signer_id: signerId, receiver_id: attestation.registry, method: "verify", explorer: txUrl(network, outcome.transaction.hash),
+    verdict, event, block_height: block?.header?.height ?? null, block_hash: lastReceipt.block_hash,
+    gas_burnt: outcome.receipts_outcome.reduce((sum, r) => sum + BigInt(r.outcome.gas_burnt), BigInt(outcome.transaction_outcome.outcome.gas_burnt)).toString(),
+    tokens_burnt_yocto: outcome.receipts_outcome.reduce((sum, r) => sum + BigInt(r.outcome.tokens_burnt), BigInt(outcome.transaction_outcome.outcome.tokens_burnt)).toString(),
+    elapsed_ms: Date.now() - started,
+  };
 }
