@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { REGISTRY, rpc } from "./wrench.mjs";
 
-const LIVE = process.env.WRENCH_URL ?? "https://near-wrench.earn-shield-alerts.workers.dev";
+const LIVE = process.env.WRENCH_URL ?? "https://near-wrench.nearbuild.workers.dev";
 const DEMO = "wrenchauditdemo1113.wrenchaudit1113.testnet";
 const EVIDENCE = [
   { name: "success verify() on the registry", hash: "DU2JDSeSUx7kc8MHN1ADDkqz2LyW9PMpsY7PRDZVQbQV", ok: true },
