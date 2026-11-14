@@ -30,7 +30,7 @@ More txs and the failure cases: [docs/EVIDENCE.md](docs/EVIDENCE.md).
 
 ## Try it in 60 seconds
 
-Open https://near-wrench.earn-shield-alerts.workers.dev and press `Review a testnet account`. No wallet needed. In about 25 seconds the three bands fill with what left your browser, what the enclave saw, and the `verify()` transaction link. Then press `Send a tampered receipt` and watch the chain refuse it.
+Open https://near-wrench.earn-shield-alerts.workers.dev and press `Audit a demo wallet`. No wallet needed. In about 25 seconds the three bands fill with what left your browser, what the enclave saw, and the `verify()` transaction link. Then press `Send a tampered receipt` and watch the chain refuse it.
 
 ## Why NEAR
 

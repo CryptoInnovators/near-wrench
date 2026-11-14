@@ -33,7 +33,7 @@ button, input { font: inherit; color: inherit; }
 .bar nav a { text-decoration: none; }
 .bar nav a:hover { text-decoration: underline; }
 .net { font-weight: 500; }
-@media (max-width: 760px) { .bar nav { display: none; } }
+@media (max-width: 760px) { .bar { flex-wrap: wrap; row-gap: 6px; } .bar nav { order: 3; width: 100%; gap: 22px; } .net { margin-left: auto; } }
 
 .hero { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); grid-template-areas: "pitch trace" "points trace"; grid-template-rows: auto 1fr; column-gap: clamp(24px, 4vw, 64px); padding: 12px var(--gutter) 96px; align-items: start; }
 .pitch { grid-area: pitch; padding-top: 24px; }
@@ -57,7 +57,7 @@ h1 { margin: 0; font-size: clamp(44px, 5.2vw, 80px); line-height: 0.98; letter-s
 .band header { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; flex-wrap: wrap; margin-bottom: 8px; }
 .big { margin: 0 0 6px; font-size: clamp(26px, 2.6vw, 38px); line-height: 1.05; letter-spacing: -0.035em; font-weight: 700; max-width: none; overflow-wrap: anywhere; }
 .band h2 { margin: 0; font-size: 22px; line-height: 1.1; letter-spacing: -0.03em; font-weight: 700; }
-.band .when { font-size: 14px; font-weight: 500; }
+.band .when { font-size: 15px; font-weight: 700; }
 .b-browser { background: var(--white); }
 .b-enclave { background: var(--ink); color: var(--white); }
 .b-chain { background: var(--grey); }
@@ -71,6 +71,8 @@ h1 { margin: 0; font-size: clamp(44px, 5.2vw, 80px); line-height: 0.98; letter-s
 @keyframes slide { from { transform: scaleX(0.15); } to { transform: scaleX(1); } }
 @media (prefers-reduced-motion: reduce) { .pending::before { animation: none; } html { scroll-behavior: auto; } }
 .bar-redact { display: inline-block; vertical-align: middle; height: 1.15em; width: min(16em, 100%); background: var(--ink); }
+.txbtn { display: inline-block; background: var(--ink); color: var(--white); padding: 10px 16px; font-weight: 700; text-decoration: none; }
+.txbtn:hover { background: var(--accent); color: var(--ink); }
 .tx-link { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; display: inline-block; margin: 4px 0 6px; overflow-wrap: anywhere; }
 .verdict { font-weight: 700; }
 .verdict.ok::before { content: "ok "; }
@@ -85,16 +87,29 @@ section.page > .intro { font-size: 20px; max-width: 34em; margin: 0 0 40px; }
 .field-ink a:hover { color: var(--accent); }
 
 .dossier-grid { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: clamp(24px, 4vw, 72px); }
+.stamp { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; background: var(--ink); color: var(--white); padding: 14px 18px; margin: 4px 0 32px; font-weight: 500; }
+.stamp strong { font-size: 22px; letter-spacing: -0.02em; }
+.stamp a { color: var(--white); }
+.stamp a:hover { color: var(--accent); }
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0; margin: 0 0 48px; }
+.facts div { background: var(--ground); padding: 18px 20px; }
+.facts dt { font-weight: 500; }
+.facts dd { margin: 0; font-size: clamp(26px, 2.6vw, 40px); font-weight: 700; letter-spacing: -0.04em; line-height: 1.05; overflow-wrap: anywhere; }
+.dossier-grid h3 { margin: 0 0 10px; font-size: 24px; letter-spacing: -0.03em; line-height: 1.15; }
+.clamp { display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; }
+.clamp.open { display: block; }
+.more { background: none; border: 0; padding: 0; margin: 0 0 20px; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 2px; cursor: pointer; }
+.leaks { width: 100%; border-collapse: collapse; margin: 0 0 40px; }
+.leaks th { text-align: left; font-weight: 700; padding: 0 16px 10px 0; }
+.leaks td { padding: 16px 16px 16px 0; vertical-align: top; border-top: 1px solid var(--grey); }
+.leaks td:last-child, .leaks th:last-child { padding-right: 0; }
+.leaks .what { font-weight: 700; display: block; margin-bottom: 4px; overflow-wrap: anywhere; }
+.sev { display: inline-block; padding: 4px 10px; font-weight: 700; background: var(--grey); }
+.sev.high { background: var(--accent); }
+.sev.medium { background: var(--ink); color: var(--white); }
 .worth { font-size: clamp(28px, 3.4vw, 52px); font-weight: 700; letter-spacing: -0.04em; line-height: 1; margin: 20px 0 8px; }
 .summary { font-size: 20px; line-height: 1.5; margin: 0 0 24px; }
-.leaks { list-style: none; margin: 0; padding: 0; display: grid; gap: 32px; }
-.leaks h3 { margin: 0 0 6px; font-size: 24px; letter-spacing: -0.03em; line-height: 1.15; }
-.leaks p { margin: 0 0 8px; }
-.leaks .act { font-weight: 700; }
 .small-list { margin: 0 0 20px; padding-left: 1.1em; }
-.seal { display: inline-block; background: var(--ink); color: var(--white); padding: 8px 14px; font-weight: 700; margin-bottom: 20px; }
-.seal a { color: var(--white); }
-.seal a:hover { color: var(--accent); }
 
 .breaks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(24px, 4vw, 72px); }
 .breaks h3 { margin: 0 0 8px; font-size: 28px; letter-spacing: -0.03em; line-height: 1.1; }
@@ -139,6 +154,10 @@ footer .links { display: flex; gap: 12px 32px; flex-wrap: wrap; font-weight: 500
   section.page { padding-block: 64px; }
   .kv { grid-template-columns: minmax(0, 1fr); gap: 0; }
   .kv dd { margin-bottom: 8px; }
+  .leaks thead { position: absolute; left: -9999px; }
+  .leaks, .leaks tbody, .leaks tr, .leaks td { display: block; width: 100%; }
+  .leaks td { padding: 4px 0; border: 0; }
+  .leaks tr { padding: 16px 0; border-top: 1px solid var(--grey); }
 }
 </style>
 </head>
@@ -152,10 +171,10 @@ footer .links { display: flex; gap: 12px 32px; flex-wrap: wrap; font-weight: 500
   <section class="hero" aria-labelledby="title">
     <div class="pitch">
       <h1 id="title">Audit your wallet privately.</h1>
-      <p class="lead">A model reads your account's exposure inside a TEE. NEAR's Sworn registry verifies its signed receipt in a real transaction before you see a word.</p>
+      <p class="lead">A model reads your wallet's history inside a sealed enclave. NEAR's Sworn registry checks its signed receipt in a real transaction before you see a word.</p>
       <div class="actions">
-        <button id="run" class="primary" type="button">Review a testnet account</button>
-        <a class="alt" href="#wallet">Use my own wallet</a>
+        <button id="run" class="primary" type="button">Audit a demo wallet</button>
+        <a class="alt" href="#wallet">Audit my own wallet</a>
       </div>
       <p id="status" class="status" role="status" aria-live="polite">Runs live on NEAR testnet in about 25 seconds.</p>
     </div>
@@ -182,17 +201,19 @@ footer .links { display: flex; gap: 12px 32px; flex-wrap: wrap; font-weight: 500
 
   <section id="dossier" class="page field-white" aria-labelledby="dossier-title" hidden>
     <h2 id="dossier-title">Your dossier</h2>
-    <p class="intro" id="dossier-account"></p>
-    <p class="seal" id="dossier-seal"></p>
+    <div class="stamp" id="dossier-seal"></div>
+    <dl class="facts" id="d-facts"></dl>
     <div class="dossier-grid">
       <div>
-        <p class="summary" id="d-summary"></p>
-        <div class="worth" id="d-worth"></div>
+        <h3>What the model found</h3>
+        <p class="summary clamp" id="d-summary"></p>
+        <button class="more" id="d-more" type="button">Read the full summary</button>
         <p id="d-worth-basis"></p>
         <p id="d-uncertainty"></p>
       </div>
       <div>
-        <ul class="leaks" id="d-leaks"></ul>
+        <h3>Where it leaks, most severe first</h3>
+        <table class="leaks" id="d-leaks"><thead><tr><th scope="col">Severity</th><th scope="col">What leaks</th><th scope="col">Do this</th></tr></thead><tbody></tbody></table>
         <h3>Linked identities</h3>
         <ul class="small-list" id="d-identities"></ul>
         <h3>Location signals</h3>
@@ -315,7 +336,9 @@ function renderEnclave() {
   if (!S.seen) { body.append(pending(S.running ? (S.owner ? "Reading the account's public data" : "Waiting for the ownership check") : "Waits for the signed challenge")); return; }
   const m = S.seen, cps = (m.counterparties || []).map(c => `${c.account_id} (${c.transactions})`).join(", ") || "none";
   body.append(el("p", { class: "big", text: `${m.balance ?? "n/a"}, ${m.transactions} transactions` }));
+  const keys = m.access_keys ? `${m.access_keys.full_access} FullAccess, ${m.access_keys.function_call} function-call` : null;
   const rows = [["Public data only", `read by Qwen3.8-27B in a TEE on NEAR AI Cloud. Counterparties: ${cps}`]];
+  if (keys) rows.push(["Access keys", keys]);
   if (S.enclave) rows.push(["Receipt", el("span", {}, document.createTextNode("enclave key "), code(S.enclave.registered_key, 8, 6), document.createTextNode(" signed request "), code(S.enclave.request_sha256, 8, 4), document.createTextNode(" and response "), code(S.enclave.response_sha256, 8, 4))]);
   body.append(kv(rows));
   if (!S.enclave) body.append(pending("Waiting for the model inside the enclave, 10 to 15 s"));
@@ -327,14 +350,15 @@ function renderChain() {
   if (!S.check) { body.append(pending(S.running ? "Waiting for the enclave's receipt" : "Waits for the enclave's receipt")); return; }
   const v = S.check.verdict, reg = S.enclave?.registry ?? "sworn-reg7-1113.testnet";
   if (!S.tx) {
-    body.append(el("p", { class: "big", text: `check() says ${v.ok ? "ok" : "refused"}` }));
+    body.append(el("p", { class: "big", text: v.ok ? "Registry check passed" : "Registry refused the receipt" }));
     body.append(kv([["Registry", a(`${SCAN}/address/${reg}`, reg)], ["Read at", `block ${S.check.block?.block_height}: ${v.reason}`]]));
     body.append(pending("Sending verify() and waiting for finality, about 5 s")); return;
   }
   const tx = S.tx;
-  body.append(el("p", { class: "big" }, a(tx.explorer, `verify() ok:${tx.verdict.ok}`, { title: tx.tx_hash })));
+  body.append(el("p", { class: "big", text: tx.verdict.ok ? "Verified on chain" : "Refused on chain" }));
+  body.append(el("p", {}, a(tx.explorer, `Open verify() tx ${short(tx.tx_hash, 8, 6)}`, { class: "txbtn", title: tx.tx_hash })));
   body.append(kv([
-    ["Transaction", el("span", {}, a(tx.explorer, short(tx.tx_hash, 10, 6)), document.createTextNode(` on ${reg}, block ${tx.block_height ?? "n/a"}, final in ${seconds(tx.elapsed_ms)}, ${(Number(BigInt(tx.tokens_burnt_yocto) / 10n ** 18n) / 1e6).toFixed(4)} NEAR gas`))],
+    ["Result", `ok:${tx.verdict.ok} on ${reg}, block ${tx.block_height ?? "n/a"}, final in ${seconds(tx.elapsed_ms)}, ${(Number(BigInt(tx.tokens_burnt_yocto) / 10n ** 18n) / 1e6).toFixed(4)} NEAR gas`],
     ["Public", "request hash, response hash, enclave signature"],
     ["Dossier text", el("span", {}, el("span", { class: "bar-redact", role: "img", "aria-label": "redacted" }), document.createTextNode("  stays off chain"))],
   ]));
@@ -405,21 +429,32 @@ async function streamReview(url, body, { mode, network, onDone, retry }) {
 // ---- dossier ----
 function renderDossier() {
   if (!S.dossier || !S.tx) return;
-  const d = S.dossier.dossier, tx = S.tx;
+  const d = S.dossier.dossier, tx = S.tx, m = S.seen || {};
   const clean = v => typeof v === "string" ? v.replaceAll("`", "") : v;
   $("dossier").hidden = false;
-  $("dossier-account").textContent = S.proof?.account_id ?? "";
-  const seal = $("dossier-seal"); seal.replaceChildren(document.createTextNode(`Released after verify() returned ok:${tx.verdict.ok}  `), a(tx.explorer, short(tx.tx_hash, 8, 6)));
+  const stamp = $("dossier-seal"); stamp.replaceChildren(
+    el("strong", { text: tx.verdict.ok ? "Verified on chain" : "Refused on chain" }),
+    el("span", { text: S.proof?.account_id ?? "" }),
+    a(tx.explorer, `verify() tx ${short(tx.tx_hash, 8, 6)}`),
+    el("span", { text: `block ${tx.block_height ?? "n/a"}, ${(Number(BigInt(tx.tokens_burnt_yocto) / 10n ** 18n) / 1e6).toFixed(4)} NEAR gas` }));
+  const facts = $("d-facts"); facts.replaceChildren();
+  const fact = (k, v) => facts.append(el("div", {}, el("dt", { text: k }), el("dd", { text: String(v) })));
+  fact("Liquid", m.balance ?? "n/a"); if (m.staked && m.staked !== "0 NEAR") fact("Staked", m.staked);
+  if (m.access_keys) fact("Access keys", `${m.access_keys.full_access + m.access_keys.function_call} (${m.access_keys.full_access} full)`);
+  fact("Transactions", m.transactions ?? "n/a"); fact("Counterparties", (m.counterparties || []).length);
   $("d-summary").textContent = clean(d.summary) || "The model returned no summary.";
-  const w = d.estimated_net_worth || {};
-  const range = Array.isArray(w.range) ? w.range.join(" to ") : w.range;
+  const more = $("d-more"), sum = $("d-summary"); sum.classList.add("clamp"); sum.classList.remove("open"); more.hidden = false; more.textContent = "Read the full summary";
+  more.onclick = () => { const open = sum.classList.toggle("open"); sum.classList.toggle("clamp", !open); more.textContent = open ? "Show less" : "Read the full summary"; };
+  const w = d.estimated_net_worth || {}, range = Array.isArray(w.range) ? w.range.join(" to ") : w.range;
   const shown = range && w.currency && String(range).includes(w.currency) ? String(range) : [range, w.currency].filter(Boolean).join(" ");
-  $("d-worth").textContent = shown || "Not enough evidence to estimate";
-  $("d-worth-basis").textContent = clean([w.confidence && `Confidence: ${w.confidence}.`, w.basis].filter(Boolean).join(" "));
+  $("d-worth-basis").textContent = clean([shown && `Estimated worth: ${shown}.`, w.confidence && `Confidence ${w.confidence}.`, w.basis].filter(Boolean).join(" "));
   $("d-uncertainty").textContent = clean(d.uncertainty) || "";
-  const leaks = $("d-leaks"); leaks.replaceChildren();
+  const body = $("d-leaks").querySelector("tbody"); body.replaceChildren();
   for (const row of d.three_links_that_leak_most || []) {
-    leaks.append(el("li", {}, el("h3", { text: clean(row.link) || "Unnamed link" }), el("p", { text: clean(row.why_it_matters) || "" }), el("p", { class: "act", text: row.safe_action ? `Do this: ${clean(row.safe_action)}` : "" })));
+    const sev = ["high", "medium", "low"].includes(String(row.severity).toLowerCase()) ? String(row.severity).toLowerCase() : "";
+    body.append(el("tr", {}, el("td", {}, sev ? el("span", { class: `sev ${sev}`, text: sev }) : null),
+      el("td", {}, el("span", { class: "what", text: clean(row.link) || "Unnamed link" }), document.createTextNode(clean(row.why_it_matters) || "")),
+      el("td", { text: clean(row.safe_action) || "" })));
   }
   const list = (id, rows, f) => { const ul = $(id); ul.replaceChildren(); if (!rows?.length) { ul.append(el("li", { text: "None in the collected evidence." })); return; } for (const r of rows) ul.append(el("li", { text: clean(f(r)) })); };
   list("d-identities", d.linked_identities, r => `${r.identity || "Unspecified"} (${r.confidence || "confidence not stated"})`);

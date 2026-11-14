@@ -154,6 +154,7 @@ function ndjson(run) {
 
 const enclaveSees = bundle => ({
   account_id: bundle.account_id, balance: bundle.balances.near_formatted, staked: bundle.balances.staked_near_formatted,
+  access_keys: { full_access: bundle.access_keys.filter(k => k.permission === "FullAccess").length, function_call: bundle.access_keys.filter(k => k.permission !== "FullAccess").length },
   token_holdings: bundle.ft_holdings.length, staking_pools: bundle.staking.length, transactions: bundle.recent_transactions.length,
   counterparties: bundle.top_counterparties, subaccounts_created: bundle.named_subaccounts_created.length,
   social_profile: Boolean(bundle.near_social_profile && Object.keys(bundle.near_social_profile).length), sources: bundle.sources,

@@ -131,12 +131,14 @@ export function formatNear(yocto) {
 export async function collectPublicData(accountId, network = "mainnet", links = []) {
   const fastnear = network === "testnet" ? "https://test.api.fastnear.com" : "https://api.fastnear.com";
   const transactions = network === "testnet" ? "https://tx.test.fastnear.com/v0" : "https://tx.main.fastnear.com/v0";
-  const [account, history, rpcAccount, social] = await Promise.all([
+  const [account, history, rpcAccount, social, keyList] = await Promise.all([
     jsonFetch(`${fastnear}/v1/account/${encodeURIComponent(accountId)}/full`),
     jsonFetch(`${transactions}/account`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ account_id: accountId, desc: true, limit: 20 }) }),
     rpc(network, "query", { request_type: "view_account", finality: "final", account_id: accountId }),
     jsonFetch(`https://api2.near.social/v1/accounts/${encodeURIComponent(accountId)}`),
+    rpc(network, "query", { request_type: "view_access_key_list", finality: "final", account_id: accountId }).catch(() => ({ keys: [] })),
   ]);
+  const accessKeys = (keyList.keys ?? []).slice(0, 20).map(k => ({ public_key: k.public_key, permission: k.access_key.permission === "FullAccess" ? "FullAccess" : { FunctionCall: { receiver_id: k.access_key.permission.FunctionCall?.receiver_id, method_names: k.access_key.permission.FunctionCall?.method_names } } }));
   const hashes = (history.account_txs ?? []).map(row => row.transaction_hash).filter(Boolean);
   const txResult = hashes.length ? await jsonFetch(`${transactions}/transactions`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ tx_hashes: hashes }) }) : { transactions: [] };
   const transactionRows = (txResult.transactions ?? []).map(row => row.transaction ?? row);
@@ -155,6 +157,7 @@ export async function collectPublicData(accountId, network = "mainnet", links = 
     account_id: accountId,
     account_ownership: "NEP-413 FullAccess verified before collection",
     balances: { near: rpcAccount.amount, staked_near: rpcAccount.locked, indexed: account.state?.balance, near_formatted: `${formatNear(rpcAccount.amount)} NEAR`, staked_near_formatted: `${formatNear(rpcAccount.locked)} NEAR`, unit: "raw fields are yoctoNEAR, 1 NEAR = 1e24; read the _formatted fields for amounts" },
+    access_keys: accessKeys,
     staking: account.pools ?? [],
     ft_holdings: account.tokens ?? [],
     mt_ft_holdings: [],
@@ -176,7 +179,7 @@ export async function collectPublicData(accountId, network = "mainnet", links = 
 }
 
 export function dossierPrompt(bundle) {
-  return `You are conducting a defensive exposure review for the verified owner of this account. Use only evidence in the JSON. Treat account-to-person and location links as hypotheses, state uncertainty, and never invent a real-world identity, street address, home, or attack instructions. Estimate net worth only as a broad range from visible balances and mark missing prices. Return one JSON object with keys: summary, estimated_net_worth (range, currency, confidence, basis), linked_identities (array with identity, evidence_ids, confidence), likely_location_signals (array with signal, evidence_ids, confidence, caveat), three_links_that_leak_most (exactly three items, each with link, evidence_ids, why_it_matters, safe_action), and uncertainty. Every evidence_ids value must point to a source path in the supplied JSON. Do not give instructions for stalking, coercion, entry, physical attack, or account compromise. If evidence is insufficient, say so in the JSON.\n\n${JSON.stringify(bundle)}`;
+  return `You are conducting a defensive exposure review for the verified owner of this account. Use only evidence in the JSON. Treat account-to-person and location links as hypotheses, state uncertainty, and never invent a real-world identity, street address, home, or attack instructions. Estimate net worth only as a broad range in NEAR from visible balances (liquid plus staked); do not convert to dollars. Pay particular attention to access_keys: extra FullAccess keys and function-call keys are exposure. Return one JSON object with keys: summary, estimated_net_worth (range, currency, confidence, basis), linked_identities (array with identity, evidence_ids, confidence), likely_location_signals (array with signal, evidence_ids, confidence, caveat), three_links_that_leak_most (exactly three items ordered most severe first, each with link, severity as high, medium or low, evidence_ids, why_it_matters, safe_action), and uncertainty. Every evidence_ids value must point to a source path in the supplied JSON. Do not give instructions for stalking, coercion, entry, physical attack, or account compromise. If evidence is insufficient, say so in the JSON.\n\n${JSON.stringify(bundle)}`;
 }
 
 export async function requestAttestedDossier(bundle, apiKey, model = MODEL, onStage = () => {}) {
