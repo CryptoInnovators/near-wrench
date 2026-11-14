@@ -12,6 +12,7 @@ const EVIDENCE = [
 
 const results = [];
 async function check(name, run) {
+  if (process.env.JUDGE_ONLY && !name.includes(process.env.JUDGE_ONLY)) return;
   const started = Date.now();
   try { const detail = await run(); results.push({ name, pass: true, detail, ms: Date.now() - started }); }
   catch (error) { results.push({ name, pass: false, detail: error.message.split("\n")[0], ms: Date.now() - started }); }
@@ -34,6 +35,17 @@ await check("live page serves the app and reports health", async () => {
   const health = await (await fetch(`${LIVE}/api/health`)).json();
   assert.equal(health.ok, true);
   return `demo account ${health.demo_account}`;
+});
+
+await check("link card: og tags and a 1200x630 PNG from our origin", async () => {
+  const html = await (await fetch(`${LIVE}/`)).text();
+  for (const tag of ["og:title", "og:description", "og:image", "twitter:card"]) assert.ok(html.includes(`"${tag}"`), `missing ${tag}`);
+  const image = new URL(html.match(/property="og:image" content="([^"]+)"/)[1]);
+  const response = await fetch(`${LIVE}${image.pathname}`);
+  assert.equal(response.headers.get("content-type"), "image/png");
+  const png = Buffer.from(await response.arrayBuffer());
+  assert.equal(png.readUInt32BE(16), 1200); assert.equal(png.readUInt32BE(20), 630);
+  return `${image.pathname} ${png.length} bytes`;
 });
 
 await check("registry contract is deployed on testnet", async () => {

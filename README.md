@@ -8,15 +8,15 @@ Live (NEAR testnet, no wallet needed): https://near-wrench.earn-shield-alerts.wo
 
 ## Do this, see that (60 seconds)
 
-1. Open the live URL and press `Audit a demo wallet`. In about 25 seconds the page fills three bands: `What left your browser` (one NEP-413 signature), `What the enclave saw` (public balance, transactions, counterparties, access keys, the enclave's signed request and response hashes) and `What the chain shows` (a `verify()` transaction on `sworn-reg7-1113.testnet` with a link that opens on testnet.nearblocks.io, `ok:true`). The dossier unseals below after that transaction returns: a verified-on-chain stamp, the facts read from chain, and findings ranked by severity, such as an extra FullAccess key.
-2. Press `Send a tampered receipt`. Wrench flips one bit of the response hash and sends it to `verify()`. See `Refused on chain`, `ok:false`, and the transaction link.
+1. Open the live URL and press `Audit a demo wallet`. In about 25 seconds the page fills three bands: `What left your browser` (one NEP-413 signature, with its byte count), `What the enclave saw` (its byte count of public balance, transactions, counterparties and access keys, plus the enclave's signed request and response hashes) and `What is public` (a `verify()` transaction on `sworn-reg7-1113.testnet` with a link that opens on testnet.nearblocks.io, `ok:true`). The dossier unseals below after that transaction returns: a verified-on-chain stamp, the facts read from chain, and findings ranked by severity, such as an extra FullAccess key.
+2. Press `Tamper with this receipt` in the green band (or `Send a tampered receipt` further down). Wrench flips one bit of the response hash and sends it to `verify()`. See `Refused on chain`, `ok:false`, and the transaction link.
 3. Under `Claim an account you do not own` press `Claim it` with `near.testnet`. See `Refused`: the signature is valid, the account's keys do not include the signer, and no data was collected.
 4. Under `Review your own account`, pick Testnet, press `Connect wallet and sign` (Meteor, Intear, MyNearWallet and others through near-connect) and the same three bands run on your account. `Sign somewhere else and paste the result` accepts any NEP-413 signature. Mainnet adds a confidential 1Click quote.
 
 ## AI judges
 
 ```
-node scripts/judge.mjs   # 9 checks against the live URL: tests, page, registry code hash, 3 evidence txs, a live run that lands a new verify() tx, refusal, tamper
+node scripts/judge.mjs   # 10 checks against the live URL: tests, page, link card (og tags and a 1200x630 PNG), registry code hash, 3 evidence txs, a live run that lands a new verify() tx, refusal, tamper
 bash scripts/test.sh     # offline: NEP-413, transaction encoding, RPC fallover, forged signatures refused
 ```
 

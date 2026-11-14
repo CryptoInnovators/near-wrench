@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Wrench og card</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&display=swap" rel="stylesheet">
+<style>
+:root { --ground:#eceef0; --white:#fff; --ink:#0f1318; --accent:#ff5a1f; --ok:#0b4a2c; --ok-line:#2fd27a; }
+* { box-sizing: border-box; margin: 0; }
+html { zoom: 1.25; }
+html, body { background: var(--ground); font-family: "DM Sans", system-ui, sans-serif; color: var(--ink); -webkit-font-smoothing: antialiased; }
+.card { width: 1200px; height: 630px; display: grid; grid-template-columns: 500px 1fr; gap: 56px; padding: 56px 64px; overflow: hidden; }
+.l { display: flex; flex-direction: column; justify-content: space-between; }
+.mark { font-weight: 700; font-size: 30px; letter-spacing: -0.03em; }
+h1 { font-size: 76px; line-height: 0.98; letter-spacing: -0.045em; font-weight: 700; }
+.sub { font-size: 24px; line-height: 1.35; font-weight: 500; }
+.sub b { color: var(--accent); }
+.r { display: flex; flex-direction: column; justify-content: center; }
+.band { padding: 22px 28px; }
+.band h2 { font-size: 22px; letter-spacing: -0.02em; font-weight: 700; margin-bottom: 10px; }
+.big { font-size: 46px; font-weight: 700; letter-spacing: -0.04em; line-height: 1; }
+.row { display: flex; gap: 28px; align-items: baseline; flex-wrap: wrap; }
+.lab { display: block; font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 700; opacity: 0.7; margin-bottom: 4px; }
+.num { font-size: 30px; font-weight: 700; letter-spacing: -0.03em; }
+.w { background: var(--white); }
+.k { background: var(--ink); color: var(--white); }
+.g { background: var(--ok); color: var(--white); }
+.stamp { display: inline-block; border: 3px solid var(--ok-line); color: var(--ok-line); font-weight: 700; letter-spacing: 0.12em; font-size: 15px; padding: 4px 10px; margin-bottom: 12px; }
+code { font: 700 15px/1.4 ui-monospace, "SF Mono", Menlo, monospace; opacity: 0.85; }
+</style></head><body>
+<div class="card">
+  <div class="l">
+    <div class="mark">Wrench</div>
+    <div><h1>Audit your wallet privately.</h1></div>
+    <p class="sub">Signed in the browser. Read inside a TEE. <b>Verified on NEAR testnet</b> by a real transaction.</p>
+  </div>
+  <div class="r">
+    <div class="band w"><h2>What left your browser</h2><div class="row"><span class="big">387 bytes</span><span class="lab" style="margin:0">a message, a key, a signature</span></div></div>
+    <div class="band k"><h2>What the enclave saw</h2><div class="row"><span class="big">668 bytes</span><span class="lab" style="margin:0">public chain data, sealed</span></div></div>
+    <div class="band g"><h2>What is public</h2>
+      <div class="stamp">VERIFIED</div>
+      <div class="row"><div><span class="lab">Result</span><span class="num">ok:true</span></div><div><span class="lab">Block</span><span class="num">277,596,897</span></div><div><span class="lab">Final in</span><span class="num">4.7 s</span></div></div>
+      <p style="margin-top:14px"><code>verify() DrsAz6ExMHo95pcumFVuU9fPvsK16eJxaAvgPdJ3WxSa</code></p>
+    </div>
+  </div>
+</div>
+</body></html>

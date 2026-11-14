@@ -6,6 +6,18 @@
 <meta name="color-scheme" content="light">
 <meta name="theme-color" content="#eceef0">
 <title>Wrench</title>
+<meta name="description" content="Audit a wallet privately. A model reads the account's public history inside a sealed enclave and a NEAR registry verifies its signed receipt on chain.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Wrench: audit your wallet privately">
+<meta property="og:description" content="Signed in the browser, read inside a TEE, verified on NEAR testnet in about 25 seconds. The receipt is a real transaction.">
+<meta property="og:image" content="https://near-wrench.earn-shield-alerts.workers.dev/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:url" content="https://near-wrench.earn-shield-alerts.workers.dev/">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Wrench: audit your wallet privately">
+<meta name="twitter:description" content="Signed in the browser, read inside a TEE, verified on NEAR testnet in about 25 seconds.">
+<meta name="twitter:image" content="https://near-wrench.earn-shield-alerts.workers.dev/og.png">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27 fill=%27none%27%3E%3Cpath d=%27M14.4 6.2a5.2 5.2 0 0 0-6.8 6.6L3.2 17.2a2 2 0 0 0 2.8 2.8l4.4-4.4a5.2 5.2 0 0 0 6.6-6.8l-3.1 3.1-3.2-3.2 3.7-2.5Z%27 stroke=%27%230f1318%27 stroke-width=%271.8%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -115,6 +127,15 @@ h1 { margin: 0; font-size: clamp(44px, 5.2vw, 80px); line-height: 0.98; letter-s
 @keyframes slide { from { transform: scaleX(0.15); } to { transform: scaleX(1); } }
 @media (prefers-reduced-motion: reduce) { .pending::before { animation: none; } html { scroll-behavior: auto; } }
 .bar-redact { display: inline-block; vertical-align: middle; height: 1.05em; width: 9em; max-width: 40%; background: currentColor; }
+.scope { margin: 10px 0 0; font-size: 13px; font-weight: 700; letter-spacing: 0.01em; }
+.chain-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; }
+.flip { display: inline-flex; align-items: center; min-height: 44px; padding: 0 18px; font: inherit; font-weight: 700; text-decoration: none; cursor: pointer; border: 2px solid currentColor; background: transparent; color: inherit; border-radius: 0; }
+.flip:hover:not(:disabled) { background: var(--ink); color: var(--white); border-color: var(--ink); }
+.flip:disabled { cursor: progress; opacity: 0.6; }
+.flip:focus-visible, .txbtn:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
+.b-chain.v-ok .flip:hover:not(:disabled) { background: var(--white); color: var(--ok); border-color: var(--white); }
+.b-chain .out { margin-top: 12px; }
+.b-chain .out:empty { display: none; }
 .txbtn { display: inline-block; background: var(--ink); color: var(--white); padding: 10px 16px; font-weight: 700; text-decoration: none; }
 .b-chain.v-ok a.txbtn { background: var(--white); color: var(--ok); }
 .b-chain.v-ok a.txbtn:hover { background: var(--ok-line); color: var(--ok); }
@@ -242,8 +263,13 @@ footer .links { display: flex; gap: 12px 32px; flex-wrap: wrap; font-weight: 500
         <div id="body-enclave"></div>
       </article>
       <article class="band b-chain" id="band-chain" aria-labelledby="h-chain">
-        <header><h2 id="h-chain">What the chain shows</h2><span class="when" id="when-chain"></span></header>
+        <header><h2 id="h-chain">What is public</h2><span class="when" id="when-chain"></span></header>
         <div id="body-chain"></div>
+        <div class="chain-actions" id="chain-actions" hidden>
+          <button id="tamper-live" class="flip" type="button">Tamper with this receipt</button>
+          <a id="share-x" class="flip" target="_blank" rel="noreferrer">Post result on X</a>
+        </div>
+        <div class="out" id="tamper-live-out" role="status" aria-live="polite"></div>
       </article>
     </div>
   </section>
@@ -374,6 +400,10 @@ const near = yocto => `${(Number(BigInt(yocto) / 10n ** 18n) / 1e6).toFixed(4)} 
 let S = emptyState();
 function emptyState() { return { mode: "demo", network: "testnet", running: false, proof: null, owner: null, seen: null, enclave: null, check: null, tx: null, dossier: null, replay: false, lastAt: null }; }
 
+const utf8 = text => new TextEncoder().encode(text).length;
+const bytesText = n => n < 1024 ? `${n} bytes` : `${(n / 1024).toFixed(1)} KB`;
+const scope = text => el("p", { class: "scope", text });
+
 function renderBrowser() {
   const body = $("body-browser"); body.replaceChildren();
   if (!S.proof) { body.append(pending(S.running ? "The challenge is being signed" : "Press the button to sign a challenge")); return; }
@@ -384,6 +414,8 @@ function renderBrowser() {
   body.append(el("p", { class: "msgline", text: msg }));
   if (S.owner) body.append(el("p", {}, a(`${S.owner.network === "mainnet" ? MAIN_SCAN : SCAN}/address/${S.owner.account_id}`, acct), document.createTextNode(S.mode === "wallet" ? " signed with your wallet. The key never left it." : " is the demo account, so no wallet is needed.")));
   else body.append(pending("Asking NEAR RPC whether this key controls the account"));
+  const out = utf8(JSON.stringify({ account_id: S.proof.account_id, public_key: S.proof.public_key, message: S.proof.message, signature: S.proof.signature }));
+  body.append(scope(`Left your browser: ${bytesText(out)}, a message, a public key and a signature. Stayed: your private key and your wallet.`));
 }
 
 function renderEnclave() {
@@ -396,12 +428,13 @@ function renderEnclave() {
   body.append(el("p", { class: "msgline", text: `Public data only, read by Qwen3.8-27B in a TEE.${top ? ` Top counterparties: ${top}.` : ""}` }));
   if (S.enclave) body.append(el("div", { class: "chips" }, chip("Enclave key", S.enclave.registered_key, 8, 6), chip("Request", S.enclave.request_sha256, 8, 4), chip("Response", S.enclave.response_sha256, 8, 4)));
   else body.append(pending("Waiting for the model inside the enclave, 10 to 15 s"));
+  body.append(scope(`Sealed in: ${bytesText(utf8(JSON.stringify(m)))} of public chain data. Never saw: your signature or your key.`));
   $("when-enclave").textContent = S.enclave?.replayed ? `Attested ${ageText(S.enclave.at)}` : "";
 }
 
 function renderChain() {
   const body = $("body-chain"), band = $("band-chain"); body.replaceChildren();
-  band.classList.remove("v-ok", "v-no");
+  band.classList.remove("v-ok", "v-no"); $("chain-actions").hidden = true;
   if (!S.check) { body.append(pending(S.running ? "Waiting for the enclave's receipt" : "Waits for the enclave's receipt")); return; }
   const v = S.check.verdict, reg = S.enclave?.registry ?? "sworn-reg7-1113.testnet";
   if (!S.tx) {
@@ -415,7 +448,9 @@ function renderChain() {
   const gas = (Number(BigInt(tx.tokens_burnt_yocto) / 10n ** 18n) / 1e6).toFixed(4);
   body.append(cells([["Result", ok ? "ok:true" : "ok:false"], ["Block", tx.block_height ?? "n/a"], ["Final in", seconds(tx.elapsed_ms)], ["Gas NEAR", gas]]));
   body.append(el("p", {}, a(tx.explorer, `Open verify() tx ${short(tx.tx_hash, 8, 6)}`, { class: "txbtn", title: tx.tx_hash })));
-  body.append(el("p", { class: "msgline", text: `${reg} holds the enclave's key and checked two hashes and a signature. Dossier text stays off chain.` }));
+  body.append(el("p", { class: "msgline", text: `${reg} holds the enclave's key and checked two hashes and a signature.` }));
+  body.append(scope("Public: this one transaction. The dossier text is 0 bytes on chain."));
+  $("chain-actions").hidden = !ok; if (ok) { const text = S.replay ? `Wrench verified a wallet audit on NEAR testnet: signed, read in a TEE, accepted by the registry. verify() tx ${tx.tx_hash}` : `Wrench audited a wallet privately on NEAR testnet in ${seconds(S.totalMs || 25000)}: signed, read in a TEE, verify() accepted on chain.`; $("share-x").href = `https://x.com/intent/post?text=${encodeURIComponent(text)}&url=${encodeURIComponent(tx.explorer)}`; }
   $("when-chain").textContent = "";
 }
 
@@ -487,7 +522,7 @@ function startTimer() { startedAt = performance.now(); clearInterval(timer); tim
 async function streamReview(url, body, { mode, network, onDone, retry }) {
   S = { ...emptyState(), mode, network, running: true, lastAt: S.lastAt };
   for (const id of ["browser", "enclave", "chain"]) $(`when-${id}`).textContent = "";
-  renderAll(); $("dossier").hidden = true; startTimer();
+  renderAll(); $("tamper-live-out").replaceChildren(); $("dossier").hidden = true; startTimer();
   $("run").disabled = true; $("connect").disabled = true;
   try {
     const response = await fetch(url, { method: "POST", headers: headers(), body: JSON.stringify(body) });
@@ -496,13 +531,13 @@ async function streamReview(url, body, { mode, network, onDone, retry }) {
     await readStream(response, ev => { if (ev.stage === "error") failure = ev; else if (ev.stage === "done") done = ev; else { applyEvent(ev); renderAll(); } });
     if (failure) throw new Error(failure.error);
     if (!done) throw new Error("The review stream ended before the chain answered.");
-    S.running = false; clearInterval(timer);
+    S.running = false; clearInterval(timer); S.totalMs = done.total_ms;
     renderAll(); renderDossier();
     renderFound((S.dossier?.dossier?.three_links_that_leak_most || []).map(r => ({ link: r.link, severity: r.severity, why: r.why_it_matters, action: r.safe_action })), "Found in this run");
     setStatus(`${S.tx?.verdict?.ok ? "Verified on NEAR testnet" : "Receipt refused on chain"} in ${seconds(done.total_ms)}${done.notice ? `. ${done.notice}` : ""}`, "", { label: "Read the dossier", run: () => $("dossier").scrollIntoView() });
     if (S.tx) { $("status").append(document.createTextNode("  "), a(S.tx.explorer, `verify() tx ${short(S.tx.tx_hash, 8, 6)}`)); }
     if (onDone) onDone(done);
-    if (S.tx?.verdict?.ok && window.scrollY < 200) setTimeout(() => { if (window.scrollY < 200) $("dossier").scrollIntoView({ behavior: "smooth" }); }, 1800);
+    if (S.tx?.verdict?.ok && window.scrollY < 200 && window.innerWidth < 900) setTimeout(() => { if (window.scrollY < 200) $("dossier").scrollIntoView({ behavior: "smooth" }); }, 1800);
     return done;
   } catch (error) {
     S.running = false; clearInterval(timer); renderAll();
@@ -568,14 +603,17 @@ async function loadLast() {
 }
 renderAll(); loadLast();
 async function tickHead() {
+  if (document.visibilityState !== "visible") return;
   try { const res = await fetch("/api/head", { headers: headers() }); if (!res.ok) return; const h = await res.json(); $("net").textContent = `NEAR testnet, block ${h.height.toLocaleString("en-US")}`; } catch { /* the pill keeps its last value */ }
 }
-tickHead(); setInterval(tickHead, 15000);
+tickHead();
+let headTimer = setInterval(tickHead, 15000);
+document.addEventListener("visibilitychange", () => { clearInterval(headTimer); if (document.visibilityState === "visible") { tickHead(); headTimer = setInterval(tickHead, 15000); } });
 
 // ---- break it ----
 function refusedBlock(title, lines) { return el("div", { class: "refused" }, el("strong", { text: title }), ...lines.map(l => el("div", {}, l))); }
-$("tamper").addEventListener("click", async () => {
-  const button = $("tamper"), out = $("tamper-out"); button.disabled = true; out.replaceChildren(pending("Sending the tampered receipt to verify() and waiting for finality, about 5 s"));
+async function runTamper(button, out) {
+   button.disabled = true; out.replaceChildren(pending("Sending the tampered receipt to verify() and waiting for finality, about 5 s"));
   try {
     const res = await fetch("/api/tamper", { method: "POST", headers: headers(), body: "{}" }), body = await res.json();
     if (!res.ok) throw new Error(body.error || "The tampered receipt could not be sent.");
@@ -586,7 +624,9 @@ $("tamper").addEventListener("click", async () => {
       a(t.explorer, `Transaction ${short(t.tx_hash, 8, 6)} at block ${t.block_height}`),
     ]));
   } catch (error) { out.replaceChildren(el("p", { text: error.message })); } finally { button.disabled = false; }
-});
+}
+$("tamper").addEventListener("click", () => runTamper($("tamper"), $("tamper-out")));
+$("tamper-live").addEventListener("click", () => runTamper($("tamper-live"), $("tamper-live-out")));
 $("unowned-form").addEventListener("submit", async event => {
   event.preventDefault(); const button = $("unowned-run"), out = $("unowned-out"); button.disabled = true; out.replaceChildren(pending("Checking the signer key against the account's keys on NEAR RPC"));
   try {
