@@ -43,6 +43,7 @@ button, input { font: inherit; color: inherit; }
 .found-head { font-weight: 700; font-size: 20px; letter-spacing: -0.02em; margin: 0 0 8px !important; }
 .found ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .found li { display: flex; gap: 12px; align-items: baseline; }
+.found-text { min-width: 0; overflow-wrap: anywhere; }
 .found .sev { flex: none; min-width: 5.5em; text-align: center; }
 .ladder { list-style: none; margin: 24px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px 22px; font-weight: 700; }
 .ladder li { display: flex; align-items: center; gap: 8px; }
@@ -327,6 +328,7 @@ const el = (tag, props = {}, ...kids) => {
   return node;
 };
 const a = (href, text, props = {}) => el("a", { href, target: "_blank", rel: "noreferrer", text, ...props });
+const keyShort = (t) => String(t).replace(/ed25519:[1-9A-HJ-NP-Za-km-z]{30,}/g, k => `${k.slice(0, 16)}…${k.slice(-4)}`);
 const short = (value, head = 10, tail = 6) => value && value.length > head + tail + 1 ? `${value.slice(0, head)}…${value.slice(-tail)}` : value;
 const code = (value, head, tail) => el("code", { title: value, text: short(value, head, tail) });
 const kv = rows => { const dl = el("dl", { class: "kv" }); for (const [k, v] of rows) { dl.append(el("dt", { text: k }), el("dd", {}, typeof v === "string" ? document.createTextNode(v) : v)); } return dl; };
@@ -396,7 +398,7 @@ function renderFound(findings, head) {
   box.hidden = !rows.length;
   if (!rows.length) return;
   $("found-head").textContent = head;
-  for (const f of rows) { const sev = ["high", "medium", "low"].includes(String(f.severity).toLowerCase()) ? String(f.severity).toLowerCase() : ""; list.append(el("li", {}, sev ? el("span", { class: `sev ${sev}`, text: sev }) : null, el("span", { text: String(f.link).replaceAll("`", "") }))); }
+  for (const f of rows) { const sev = ["high", "medium", "low"].includes(String(f.severity).toLowerCase()) ? String(f.severity).toLowerCase() : ""; list.append(el("li", {}, sev ? el("span", { class: `sev ${sev}`, text: sev }) : null, el("span", { class: "found-text", text: keyShort(String(f.link).replaceAll("`", "")) }))); }
 }
 
 function renderAll() { renderBrowser(); renderEnclave(); renderChain(); renderLadder(); if (S.running) renderFound(null); }
@@ -490,7 +492,7 @@ function renderDossier() {
   for (const row of d.three_links_that_leak_most || []) {
     const sev = ["high", "medium", "low"].includes(String(row.severity).toLowerCase()) ? String(row.severity).toLowerCase() : "";
     body.append(el("tr", {}, el("td", {}, sev ? el("span", { class: `sev ${sev}`, text: sev }) : null),
-      el("td", {}, el("span", { class: "what", text: clean(row.link) || "Unnamed link" }), document.createTextNode(clean(row.why_it_matters) || "")),
+      el("td", {}, el("span", { class: "what", text: keyShort(clean(row.link)) || "Unnamed link" }), document.createTextNode(clean(row.why_it_matters) || "")),
       el("td", { text: clean(row.safe_action) || "" })));
   }
   const list = (id, rows, f) => { const ul = $(id); ul.replaceChildren(); if (!rows?.length) { ul.append(el("li", { text: "None in the collected evidence." })); return; } for (const r of rows) ul.append(el("li", { text: clean(f(r)) })); };
