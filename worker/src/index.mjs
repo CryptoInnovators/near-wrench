@@ -83,20 +83,37 @@ function signDemoProof(env, claimedAccount) {
   return { accountId: claimedAccount, publicKey, signature, payload };
 }
 
-async function attestedReview({ proof, network, env, linked = [] }) {
+const noop = () => {};
+
+async function runPipeline({ env, state, emit = noop, proof, network, linked = [], replay = null, saveLast = false }) {
   const t0 = Date.now();
+  const proofView = { account_id: proof.accountId, public_key: proof.publicKey, message: proof.payload.message, recipient: proof.payload.recipient, nonce: proof.payload.nonce, signature: proof.signature };
+  await emit({ stage: "sign", proof: proofView, at_ms: 0 });
   const owner = await verifyAccountOwnership(proof, network);
-  const t1 = Date.now();
-  const bundle = await collectPublicData(proof.accountId, network, linked);
-  bundle.ownership = owner;
-  const t2 = Date.now();
-  const result = await requestAttestedDossier(bundle, env.NEAR_AI_API_KEY);
-  const timings_ms = { ownership: t1 - t0, collect: t2 - t1, model_and_registry: Date.now() - t2 };
-  const evidence = {
-    timings_ms, network, collected_at: bundle.collected_at, balance_yocto: bundle.balances.near, recent_transactions: bundle.recent_transactions.length,
-    top_counterparties: bundle.top_counterparties, sources: bundle.sources,
-  };
-  return { bundle, owner, evidence, ...result };
+  await emit({ stage: "owner", ownership: owner, at_ms: Date.now() - t0 });
+  let dossier, attestation, evidence, at, seen, balance = null;
+  if (replay) {
+    ({ dossier, evidence, at } = replay);
+    seen = { account_id: replay.demo_account, balance: `${formatNear(evidence.balance_yocto)} NEAR`, transactions: evidence.recent_transactions, counterparties: evidence.top_counterparties, ...replay.enclave_sees, sources: evidence.sources };
+    await emit({ stage: "collect", replayed: true, enclave_sees: seen, at_ms: Date.now() - t0 });
+    await emit({ stage: "enclave", replayed: true, model: replay.attestation.model, registry: replay.attestation.registry, registered_key: replay.attestation.registered_key, request_sha256: replay.attestation.request_sha256, response_sha256: replay.attestation.response_sha256, signature: replay.attestation.signature, at, at_ms: Date.now() - t0 });
+    attestation = await recheckReceipt(replay.attestation);
+    await emit({ stage: "check", verdict: attestation.verdict, block: attestation.verdict_block, at_ms: Date.now() - t0 });
+  } else {
+    const bundle = await collectPublicData(proof.accountId, network, linked);
+    bundle.ownership = owner;
+    balance = bundle.balances.near;
+    seen = enclaveSees(bundle);
+    await emit({ stage: "collect", enclave_sees: seen, at_ms: Date.now() - t0 });
+    const result = await requestAttestedDossier(bundle, env.NEAR_AI_API_KEY, MODEL, async event => emit({ ...event, at_ms: Date.now() - t0 }));
+    dossier = result.dossier; attestation = result.attestation; at = new Date().toISOString();
+    evidence = { network, collected_at: bundle.collected_at, balance_yocto: bundle.balances.near, recent_transactions: bundle.recent_transactions.length, top_counterparties: bundle.top_counterparties, sources: bundle.sources };
+  }
+  const tx = await verifyOnChain({ attestation, ...demoKey(env) });
+  await emit({ stage: "tx", tx, at_ms: Date.now() - t0 });
+  if (saveLast && !replay) await state.saveLast({ at, network, demo_account: proof.accountId, ownership: owner, evidence, enclave_sees: seen, dossier, attestation, tx });
+  await emit({ stage: "dossier", dossier, evidence, attestation: { ...attestation, signature: undefined }, at, at_ms: Date.now() - t0 });
+  return { owner, balance, total_ms: Date.now() - t0, fresh: !replay };
 }
 
 const REPLAY_MAX_AGE_MS = 3 * 3_600_000;
@@ -104,10 +121,7 @@ const humanAge = ms => ms < 90_000 ? "moments ago" : ms < 5_400_000 ? `${Math.ro
 
 async function freshDemo(env, state) {
   const proof = signDemoProof(env, env.DEMO_ACCOUNT);
-  const review = await attestedReview({ proof, network: "testnet", env });
-  const out = { at: new Date().toISOString(), network: "testnet", demo_account: env.DEMO_ACCOUNT, ownership: review.owner, evidence: review.evidence, dossier: review.dossier, attestation: review.attestation };
-  await state.saveLast(out);
-  return out;
+  return runPipeline({ env, state, proof, network: "testnet", saveLast: true });
 }
 
 async function gate(env, request, kind) {
@@ -154,12 +168,18 @@ async function route(request, env) {
     return json(200, { ok: true, demo_account: env.DEMO_ACCOUNT, paid_calls_today: await state.usage(), paid_calls_daily_cap: Number(env.PAID_GLOBAL_DAY), per_ip_daily_cap: Number(env.PAID_PER_IP_DAY) });
   }
 
+  if (method === "GET" && path === "/api/last") {
+    const last = await state.getLast();
+    if (!last?.tx) return json(200, { last: null });
+    return json(200, { last: { at: last.at, demo_account: last.demo_account, ownership: last.ownership, enclave_sees: last.enclave_sees ?? null, attestation: { model: last.attestation.model, registry: last.attestation.registry, registered_key: last.attestation.registered_key, request_sha256: last.attestation.request_sha256, response_sha256: last.attestation.response_sha256, verdict: last.attestation.verdict, verdict_block: last.attestation.verdict_block }, tx: last.tx } });
+  }
+
   if (method === "POST" && path === "/api/demo") {
     const input = await bodyJson(request);
     const last = await state.getLast();
     let fresh = false, notice = "";
     const replayOnly = input.fresh === false && last;
-    const paid = replayOnly ? { ok: false, replayOnly: true } : await gate(env, request, "paid");
+    const paid = replayOnly ? { ok: false } : await gate(env, request, "paid");
     if (replayOnly) {
       const cheap = await gate(env, request, "cheap");
       if (!cheap.ok) throw new HttpError(429, "Too many requests. Wait a minute.", { retryAfter: cheap.retryAfter });
@@ -168,32 +188,10 @@ async function route(request, env) {
     else notice = `Fresh model calls are limited per visitor and per day. This run re-verifies the attested review from ${humanAge(Date.now() - Date.parse(last.at))} on chain.`;
     const txGate = await gate(env, request, "tx");
     if (!txGate.ok) throw new HttpError(429, `On-chain verification budget reached (${txGate.scope}). Try again in ${Math.ceil(txGate.retryAfter / 60)} minutes.`, { retryAfter: txGate.retryAfter });
+    const proof = signDemoProof(env, env.DEMO_ACCOUNT);
     return ndjson(async emit => {
-      const t0 = Date.now();
-      const proof = signDemoProof(env, env.DEMO_ACCOUNT);
-      await emit({ stage: "sign", proof: { account_id: proof.accountId, public_key: proof.publicKey, message: proof.payload.message, recipient: proof.payload.recipient, nonce: proof.payload.nonce, signature: proof.signature }, at_ms: Date.now() - t0 });
-      const owner = await verifyAccountOwnership(proof, "testnet");
-      await emit({ stage: "owner", ownership: owner, at_ms: Date.now() - t0 });
-      let dossier, attestation, evidence, at;
-      if (fresh) {
-        const bundle = await collectPublicData(proof.accountId, "testnet", []);
-        bundle.ownership = owner;
-        await emit({ stage: "collect", enclave_sees: enclaveSees(bundle), at_ms: Date.now() - t0 });
-        const result = await requestAttestedDossier(bundle, env.NEAR_AI_API_KEY, MODEL, async event => emit({ ...event, at_ms: Date.now() - t0 }));
-        dossier = result.dossier; attestation = result.attestation; at = new Date().toISOString();
-        evidence = { network: "testnet", collected_at: bundle.collected_at, balance_yocto: bundle.balances.near, recent_transactions: bundle.recent_transactions.length, top_counterparties: bundle.top_counterparties, sources: bundle.sources, timings_ms: { ownership: 0, collect: 0, model_and_registry: attestation.timings_ms.completion + attestation.timings_ms.receipt } };
-        await state.saveLast({ at, network: "testnet", demo_account: env.DEMO_ACCOUNT, ownership: owner, evidence, dossier, attestation });
-      } else {
-        ({ dossier, evidence, at } = last);
-        await emit({ stage: "collect", replayed: true, enclave_sees: { account_id: last.demo_account, balance: `${formatNear(evidence.balance_yocto)} NEAR`, transactions: evidence.recent_transactions, counterparties: evidence.top_counterparties, sources: evidence.sources }, at_ms: Date.now() - t0 });
-        await emit({ stage: "enclave", replayed: true, model: last.attestation.model, registry: last.attestation.registry, registered_key: last.attestation.registered_key, request_sha256: last.attestation.request_sha256, response_sha256: last.attestation.response_sha256, signature: last.attestation.signature, at, at_ms: Date.now() - t0 });
-        attestation = await recheckReceipt(last.attestation);
-        await emit({ stage: "check", verdict: attestation.verdict, block: attestation.verdict_block, at_ms: Date.now() - t0 });
-      }
-      const tx = await verifyOnChain({ attestation, ...demoKey(env) });
-      await emit({ stage: "tx", tx, at_ms: Date.now() - t0 });
-      await emit({ stage: "dossier", dossier, evidence, attestation: { ...attestation, signature: undefined }, at, at_ms: Date.now() - t0 });
-      await emit({ stage: "done", fresh, notice, total_ms: Date.now() - t0 });
+      const out = await runPipeline({ env, state, emit, proof, network: "testnet", replay: fresh ? null : last, saveLast: true });
+      await emit({ stage: "done", fresh, notice, total_ms: out.total_ms });
     });
   }
 
@@ -230,17 +228,20 @@ async function route(request, env) {
     const verdict = await gate(env, request, "cheap");
     if (!verdict.ok) throw new HttpError(429, "Too many requests. Wait a minute.", { retryAfter: verdict.retryAfter });
     const id = url.searchParams.get("accountId");
+    const network = url.searchParams.get("network") === "mainnet" ? "mainnet" : "testnet";
     if (!accountId(id)) throw new HttpError(400, "Enter a valid NEAR account ID.");
     const nonce = randomBytes(32), nonceHex = nonce.toString("hex");
     const payload = { message: `Authorize Wrench dossier for ${id} nonce=${nonceHex}`, nonce: nonce.toString("base64"), recipient: "wrench.local" };
     const challengeId = randomUUID();
-    await state.putChallenge(challengeId, { id, nonceHex, payload, expires: Date.now() + 5 * 60_000 });
-    return json(200, { challengeId, payload, linkMessages: { evm: `Authorize Wrench link evm <ADDRESS> for ${id} nonce=${nonceHex}`, solana: `Authorize Wrench link solana <ADDRESS> for ${id} nonce=${nonceHex}` } });
+    await state.putChallenge(challengeId, { id, nonceHex, payload, network, expires: Date.now() + 5 * 60_000 });
+    return json(200, { challengeId, network, payload, linkMessages: { evm: `Authorize Wrench link evm <ADDRESS> for ${id} nonce=${nonceHex}`, solana: `Authorize Wrench link solana <ADDRESS> for ${id} nonce=${nonceHex}` } });
   }
 
   if (method === "POST" && path === "/api/dossier") {
     const verdict = await gate(env, request, "paid");
     if (!verdict.ok) throw new HttpError(429, `Review budget reached (${verdict.scope}). Try again in ${Math.ceil(verdict.retryAfter / 60)} minutes, or run the no-wallet demo.`, { retryAfter: verdict.retryAfter });
+    const txGate = await gate(env, request, "tx");
+    if (!txGate.ok) throw new HttpError(429, `On-chain verification budget reached (${txGate.scope}). Try again in ${Math.ceil(txGate.retryAfter / 60)} minutes.`, { retryAfter: txGate.retryAfter });
     const input = await bodyJson(request);
     const challenge = await state.takeChallenge(input.challengeId);
     if (!challenge) throw new HttpError(400, "Signing challenge expired or already used. Request a fresh one.");
@@ -250,10 +251,12 @@ async function route(request, env) {
     for (const item of input.linkedAddresses ?? []) {
       linked.push(await verifyLinkedAddress(item, `Authorize Wrench link ${item.chain} ${item.address} for ${proof.accountId} nonce=${challenge.nonceHex}`));
     }
-    const review = await attestedReview({ proof, network: "mainnet", env, linked });
-    const session = randomUUID();
-    await state.putSession(session, { proof, balance: review.bundle.balances.near, expires: Date.now() + 10 * 60_000 });
-    return json(200, { dossier: review.dossier, attestation: review.attestation, ownership: review.owner, evidence: review.evidence, session });
+    return ndjson(async emit => {
+      const out = await runPipeline({ env, state, emit, proof, network: challenge.network ?? "testnet", linked });
+      const session = randomUUID();
+      await state.putSession(session, { proof, balance: out.balance, network: challenge.network ?? "testnet", expires: Date.now() + 10 * 60_000 });
+      await emit({ stage: "done", fresh: true, session, network: challenge.network ?? "testnet", total_ms: out.total_ms });
+    });
   }
 
   if (method === "POST" && path === "/api/quote-session") {
@@ -284,6 +287,7 @@ async function route(request, env) {
     const session = await state.getSession(input.session);
     if (!session) throw new HttpError(401, "Dossier session expired. Run a new signed review before requesting a quote.");
     if (!session.oneClickToken || session.oneClickTokenExpires < Date.now()) throw new HttpError(401, "Sign the NEAR Intents ownership request before quoting.");
+    if (session.network !== "mainnet") throw new HttpError(400, "Confidential 1Click quotes use a mainnet account. Connect a mainnet wallet and review it first.");
     const owner = await verifyAccountOwnership(session.proof, "mainnet");
     const amount = String(input.amount ?? "");
     if (!/^\d+$/.test(amount) || BigInt(amount) > BigInt(session.balance)) throw new HttpError(400, "Amount must be a positive integer no greater than the verified public NEAR balance.");
