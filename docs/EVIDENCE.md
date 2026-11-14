@@ -4,6 +4,8 @@ Every row is a NEAR testnet transaction or a command anyone can run.
 
 | Case | Result | Evidence |
 | --- | --- | --- |
+| Cold run, storage cleared, access-key review: severity table with high, medium, low findings | `ok:true`, 17.1 s from click to final | [7A673VZz…](https://testnet.nearblocks.io/txns/7A673VZzq65fLrjvjSNGH87HHf3cDUG6CBzJd41LfbEX) |
+| Four visitors at the same moment | four distinct `verify()` transactions from one operator key, each about 4.7 s, nonces allocated in a Durable Object | `curl -N -X POST .../api/demo -d '{"fresh":false}'` four times in parallel |
 | Cold run on the hosted page, fresh model call | `verify()` returned `ok:true`, 25.1 s from click to final | [DU2JDSeS…](https://testnet.nearblocks.io/txns/DU2JDSeSUx7kc8MHN1ADDkqz2LyW9PMpsY7PRDZVQbQV) |
 | Cold run after the operator split: verify() signed by `wrench-op-1114.testnet`, subject account `wrenchauditdemo1113.wrenchaudit1113.testnet` with transfers, a subaccount and a stake | `ok:true`, 26.3 s | [5gtsaR6e…](https://testnet.nearblocks.io/txns/5gtsaR6eAoqjpdtXvP9Xj8Hqnj42NxAdF7WoitNR8ZwQ) |
 | Wallet path, signature pasted into the page, testnet account | `ok:true`, 25.7 s | [CgS9yrwj…](https://testnet.nearblocks.io/txns/CgS9yrwjzRUeoHo2kxuagRpoVckzK6M69bTBEPtgjvzN) |

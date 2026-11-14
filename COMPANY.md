@@ -18,7 +18,7 @@ NEAR account owners who want to see what their own wallet gives away, and want p
 
 | Fact | Evidence |
 | --- | --- |
-| A cold click on the hosted page runs the whole review and lands a `verify()` transaction in 26.3 s | [5gtsaR6e…](https://testnet.nearblocks.io/txns/5gtsaR6eAoqjpdtXvP9Xj8Hqnj42NxAdF7WoitNR8ZwQ) returned `ok:true`, `verified`; first run [DU2JDSeS…](https://testnet.nearblocks.io/txns/DU2JDSeSUx7kc8MHN1ADDkqz2LyW9PMpsY7PRDZVQbQV) in 25.1 s |
+| A cold click on the hosted page runs the whole review and lands a `verify()` transaction in 17.1 s | [7A673VZz…](https://testnet.nearblocks.io/txns/7A673VZzq65fLrjvjSNGH87HHf3cDUG6CBzJd41LfbEX) returned `ok:true`, `verified`; earlier cold runs [5gtsaR6e…](https://testnet.nearblocks.io/txns/5gtsaR6eAoqjpdtXvP9Xj8Hqnj42NxAdF7WoitNR8ZwQ) in 26.3 s and [DU2JDSeS…](https://testnet.nearblocks.io/txns/DU2JDSeSUx7kc8MHN1ADDkqz2LyW9PMpsY7PRDZVQbQV) in 25.1 s |
 | A wallet-path review (NEP-413 signature pasted into the page) completes on testnet | [CgS9yrwj…](https://testnet.nearblocks.io/txns/CgS9yrwjzRUeoHo2kxuagRpoVckzK6M69bTBEPtgjvzN) returned `ok:true` in 25.7 s |
 | A tampered receipt is refused on chain | [7fcG8P6A…](https://testnet.nearblocks.io/txns/7fcG8P6AV3Z8wYHP8j8JH1HRGViSiCqrdnuUdkG2tKfa) returned `ok:false`, `signature does not verify over model:request:response` |
 | A valid signature does not open an account the key does not control | `node scripts/judge.mjs` runs the live `/api/demo-unowned` refusal for `near.testnet` |
