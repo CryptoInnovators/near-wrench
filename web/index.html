@@ -61,7 +61,7 @@ h1 { margin: 0; font-size: clamp(44px, 5.2vw, 80px); line-height: 0.98; letter-s
 .points { margin-top: 36px; display: grid; gap: 14px; max-width: 32em; }
 .points p { margin: 0; }
 .trace { display: grid; gap: 0; }
-.band { padding: clamp(16px, 2vw, 26px) clamp(18px, 2.4vw, 32px); }
+.band { padding: clamp(14px, 1.5vw, 20px) clamp(18px, 2.4vw, 32px); }
 .band header { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; flex-wrap: wrap; margin-bottom: 8px; }
 .big { margin: 0 0 6px; font-size: clamp(26px, 2.6vw, 38px); line-height: 1.05; letter-spacing: -0.035em; font-weight: 700; max-width: none; overflow-wrap: anywhere; }
 .band h2 { margin: 0; font-size: 22px; line-height: 1.1; letter-spacing: -0.03em; font-weight: 700; }
@@ -370,8 +370,8 @@ function renderChain() {
   body.append(el("p", { class: "big", text: tx.verdict.ok ? "Verified on chain" : "Refused on chain" }));
   body.append(el("p", {}, a(tx.explorer, `Open verify() tx ${short(tx.tx_hash, 8, 6)}`, { class: "txbtn", title: tx.tx_hash })));
   body.append(kv([
-    ["Result", `ok:${tx.verdict.ok} on ${reg}, block ${tx.block_height ?? "n/a"}, final in ${seconds(tx.elapsed_ms)}, ${(Number(BigInt(tx.tokens_burnt_yocto) / 10n ** 18n) / 1e6).toFixed(4)} NEAR gas`],
-    ["Public", "request hash, response hash, enclave signature"],
+    ["Result", `ok:${tx.verdict.ok}, block ${tx.block_height ?? "n/a"}, final in ${seconds(tx.elapsed_ms)}, ${(Number(BigInt(tx.tokens_burnt_yocto) / 10n ** 18n) / 1e6).toFixed(4)} NEAR gas`],
+    ["On chain", `${reg}: two hashes and a signature`],
     ["Dossier text", el("span", {}, el("span", { class: "bar-redact", role: "img", "aria-label": "redacted" }), document.createTextNode("  stays off chain"))],
   ]));
   $("when-chain").textContent = "";
