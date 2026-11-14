@@ -67,19 +67,48 @@ export function proofBindsAccount(proof) {
 
 const RPC_URLS = { testnet: ["https://near-testnet.drpc.org", "https://archival-rpc.testnet.near.org", "https://test.rpc.fastnear.com"], mainnet: ["https://rpc.mainnet.fastnear.com"] };
 
-export async function rpc(network, method, params) {
-  const urls = RPC_URLS[network];
+const NODE_SIDE = /free plan|not available|rate limit|timeout|temporar|overload/i;
+
+async function rpcAttempt(url, method, params) {
+  const response = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: "wrench", method, params }), signal: AbortSignal.timeout(8000) });
   let body;
-  for (const [index, url] of urls.entries()) {
-    try {
-      body = await jsonFetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: "wrench", method, params }) });
-      break;
-    } catch (error) {
-      if (index === urls.length - 1) throw error;
-    }
+  try { body = await response.json(); } catch { throw new Error(`${url} returned HTTP ${response.status} with no JSON`); }
+  if (response.status === 429 || response.status >= 500) throw new Error(`${url} returned HTTP ${response.status}`);
+  if (body.error) {
+    const message = String(body.error.message ?? "");
+    const error = new Error(`NEAR RPC ${message}: ${typeof body.error.data === "string" ? body.error.data : JSON.stringify(body.error.data ?? "")}`);
+    error.definitive = !(NODE_SIDE.test(message) || (message === "Server error" && !body.error.data && !body.error.cause));
+    throw error;
   }
-  if (body.error) throw new Error(`NEAR RPC ${body.error.message}: ${body.error.data ?? ""}`);
   return body.result;
+}
+
+// Hedged call: ask the first RPC, start the next after a short delay or at once when one fails, take the first answer.
+function hedged(urls, attempt, delay = 900) {
+  return new Promise((resolve, reject) => {
+    let started = 0, failed = 0, done = false;
+    const errors = [];
+    const launch = () => {
+      if (done || started >= urls.length) return;
+      const url = urls[started++];
+      attempt(url).then(value => { if (!done) { done = true; resolve(value); } }, error => {
+        if (done) return;
+        errors.push(error);
+        if (error.definitive) { done = true; reject(error); return; }
+        failed += 1;
+        if (failed >= urls.length) { done = true; reject(errors.at(-1)); } else launch();
+      });
+      if (started < urls.length) setTimeout(launch, delay);
+    };
+    launch();
+  });
+}
+
+export async function rpc(network, method, params) {
+  for (let attempt = 0; ; attempt += 1) {
+    try { return await hedged(RPC_URLS[network], url => rpcAttempt(url, method, params)); }
+    catch (error) { if (error.definitive || attempt >= 2) throw error; await sleep(400 * (attempt + 1)); }
+  }
 }
 
 export async function verifyAccountOwnership(proof, network = "mainnet") {
@@ -341,19 +370,26 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 const transient = error => /HTTP 429|HTTP 5\d\d|Rate limit|timed out|timeout|fetch failed|aborted|ECONN/i.test(error.message);
 
-export async function sendFunctionCall({ network = "testnet", signerId, publicKey, privateKey, receiverId, methodName, args, gas = 30_000_000_000_000n, deposit = 0n }) {
+export async function sendFunctionCall({ network = "testnet", signerId, publicKey, privateKey, receiverId, methodName, args, gas = 30_000_000_000_000n, deposit = 0n, timings = {} }) {
   let failure;
+  const t0 = Date.now();
   for (let attempt = 0; attempt < 6; attempt += 1) {
     if (failure && transient(failure)) await sleep(700 * attempt);
     let key;
     try { key = await rpc(network, "query", { request_type: "view_access_key", finality: "final", account_id: signerId, public_key: publicKey }); }
     catch (error) { failure = error; if (transient(error)) continue; throw error; }
+    timings.key_ms = Date.now() - t0; timings.attempts = attempt + 1;
     const nonce = Math.max(Number(key.nonce), lastNonce.get(signerId) ?? 0) + 1;
     lastNonce.set(signerId, nonce);
     const tx = encodeFunctionCallTx({ signerId, publicKey, nonce, receiverId, blockHash: key.block_hash, methodName, args: JSON.stringify(args), gas, deposit });
     try {
+      const sent = Date.now();
       await rpc(network, "send_tx", { signed_tx_base64: signedTxBase64(tx, privateKey), wait_until: "NONE" });
-      return await awaitFinal(network, encodeBase58(createHash("sha256").update(tx).digest()), signerId);
+      timings.send_ms = Date.now() - sent;
+      const polled = Date.now();
+      const result = await awaitFinal(network, encodeBase58(createHash("sha256").update(tx).digest()), signerId);
+      timings.final_ms = Date.now() - polled;
+      return result;
     } catch (error) {
       failure = error;
       if (/InvalidNonce|nonce/i.test(error.message)) { lastNonce.delete(signerId); await sleep(150 + Math.floor(Math.random() * 350)); continue; }
@@ -367,8 +403,9 @@ export const txUrl = (network, hash) => `https://${network === "testnet" ? "test
 
 export async function verifyOnChain({ attestation, signerId, publicKey, privateKey, network = "testnet" }) {
   const started = Date.now();
+  const timings = {};
   const outcome = await sendFunctionCall({
-    network, signerId, publicKey, privateKey, receiverId: attestation.registry, methodName: "verify",
+    timings, network, signerId, publicKey, privateKey, receiverId: attestation.registry, methodName: "verify",
     args: {
       public_key: attestation.registered_key, model_id: attestation.model, request_sha256: attestation.request_sha256,
       response_sha256: attestation.response_sha256, signature: attestation.signature.replace(/^0x/, ""), required_platform: null, required_app_id: null,
@@ -385,6 +422,6 @@ export async function verifyOnChain({ attestation, signerId, publicKey, privateK
     verdict, event, block_height: block?.header?.height ?? null, block_hash: lastReceipt.block_hash,
     gas_burnt: outcome.receipts_outcome.reduce((sum, r) => sum + BigInt(r.outcome.gas_burnt), BigInt(outcome.transaction_outcome.outcome.gas_burnt)).toString(),
     tokens_burnt_yocto: outcome.receipts_outcome.reduce((sum, r) => sum + BigInt(r.outcome.tokens_burnt), BigInt(outcome.transaction_outcome.outcome.tokens_burnt)).toString(),
-    elapsed_ms: Date.now() - started,
+    elapsed_ms: Date.now() - started, timings,
   };
 }
