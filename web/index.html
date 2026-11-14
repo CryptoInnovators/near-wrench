@@ -38,6 +38,14 @@ button, input { font: inherit; color: inherit; }
 .hero { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); grid-template-areas: "pitch trace" "points trace"; grid-template-rows: auto 1fr; column-gap: clamp(24px, 4vw, 64px); padding: 12px var(--gutter) 96px; align-items: start; }
 .pitch { grid-area: pitch; padding-top: 24px; }
 .points { grid-area: points; }
+.lead-m { display: none; font-size: 17px; }
+.ladder { list-style: none; margin: 24px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px 22px; font-weight: 700; }
+.ladder li { display: flex; align-items: center; gap: 8px; }
+.ladder i { width: 14px; height: 14px; background: #b4bac1; display: inline-block; }
+.ladder li.done i { background: var(--ink); }
+.ladder li.active i { background: var(--accent); animation: blink 0.7s steps(2) infinite; }
+@keyframes blink { 50% { opacity: 0.25; } }
+@media (prefers-reduced-motion: reduce) { .ladder li.active i { animation: none; } }
 .trace { grid-area: trace; }
 h1 { margin: 0; font-size: clamp(44px, 5.2vw, 80px); line-height: 0.98; letter-spacing: -0.045em; font-weight: 700; }
 .lead { margin: 28px 0 0; font-size: 20px; line-height: 1.45; max-width: 30em; }
@@ -46,7 +54,7 @@ h1 { margin: 0; font-size: clamp(44px, 5.2vw, 80px); line-height: 0.98; letter-s
 .primary:hover:not(:disabled) { background: var(--ink); color: var(--white); }
 .primary:disabled { cursor: progress; background: var(--ink); color: var(--white); }
 .alt { font-weight: 500; }
-.status { margin: 20px 0 0; min-height: 3.2em; font-weight: 500; max-width: 32em; }
+.status { margin: 14px 0 0; min-height: 2.8em; font-weight: 500; max-width: 32em; }
 .status.error { background: var(--accent); padding: 12px 14px; }
 .status .retry { font: inherit; font-weight: 700; background: none; border: 0; padding: 0; text-decoration: underline; cursor: pointer; }
 
@@ -146,7 +154,9 @@ footer .links { display: flex; gap: 12px 32px; flex-wrap: wrap; font-weight: 500
   .hero, .dossier-grid, .breaks { grid-template-columns: minmax(0, 1fr); }
   .hero { grid-template-areas: "pitch" "trace" "points"; grid-template-rows: auto; row-gap: 28px; padding-bottom: 56px; }
   .pitch { padding-top: 8px; }
-  .lead { font-size: 17px; margin-top: 14px; }
+  .lead { display: none; }
+  .lead-m { display: block; }
+  .ladder { margin-top: 16px; }
   .actions { margin-top: 18px; }
   .primary { min-height: 52px; font-size: 17px; }
   .status { margin-top: 12px; min-height: 2.4em; }
@@ -176,9 +186,11 @@ footer .links { display: flex; gap: 12px 32px; flex-wrap: wrap; font-weight: 500
         <button id="run" class="primary" type="button">Audit a demo wallet</button>
         <a class="alt" href="#wallet">Audit my own wallet</a>
       </div>
+      <ol class="ladder" id="ladder" aria-label="Progress of the review"><li data-step="sign"><i></i>Signed</li><li data-step="enclave"><i></i>Read in the enclave</li><li data-step="chain"><i></i>Verified on chain</li></ol>
       <p id="status" class="status" role="status" aria-live="polite">Runs live on NEAR testnet in about 25 seconds.</p>
     </div>
     <div class="points">
+        <p class="lead-m">A model reads your wallet's history inside a sealed enclave. NEAR's Sworn registry checks its signed receipt in a real transaction before you see a word.</p>
         <p><strong>Private by construction.</strong> Only public account data enters the enclave. Your key stays in your wallet.</p>
         <p><strong>Checked on chain.</strong> The enclave's signature must match the key the registry holds, in a transaction anyone can open.</p>
         <p><strong>Refuses what it cannot prove.</strong> An account you do not own, or a receipt with one flipped bit, stops cold.</p>
@@ -326,18 +338,18 @@ function renderBrowser() {
   if (!S.proof) { body.append(pending(S.running ? "The challenge is being signed" : "Press the button to sign a challenge")); return; }
   body.append(el("p", { class: "big", text: "One signed message." }));
   const msg = S.proof.message.replace(/nonce=([0-9a-f]{8})[0-9a-f]+/, "nonce=$1…");
-  body.append(kv([["Message", msg], ["Key", code(S.proof.public_key, 14, 6)], ["Signed by", S.mode === "wallet" ? "your wallet, the key never left it" : "the demo account's key on the Worker, no wallet needed"]]));
-  if (S.owner) body.append(el("p", {}, a(`${S.owner.network === "mainnet" ? MAIN_SCAN : SCAN}/address/${S.owner.account_id}`, S.owner.account_id), document.createTextNode(` holds that key as ${S.owner.permission} at block ${S.owner.block_height}. Not sent: private key, seed phrase, history.`)));
+  body.append(kv([["Message", msg], ["Key", el("span", {}, code(S.proof.public_key, 14, 6), document.createTextNode(S.mode === "wallet" ? "  your wallet signed it, the key never left" : "  the demo account's key, no wallet needed"))]]));
+  if (S.owner) body.append(el("p", {}, a(`${S.owner.network === "mainnet" ? MAIN_SCAN : SCAN}/address/${S.owner.account_id}`, S.owner.account_id), document.createTextNode(` holds that key as ${S.owner.permission} at block ${S.owner.block_height}.`)));
   else body.append(pending("Asking NEAR RPC whether this key controls the account"));
 }
 
 function renderEnclave() {
   const body = $("body-enclave"); body.replaceChildren();
   if (!S.seen) { body.append(pending(S.running ? (S.owner ? "Reading the account's public data" : "Waiting for the ownership check") : "Waits for the signed challenge")); return; }
-  const m = S.seen, cps = (m.counterparties || []).map(c => `${c.account_id} (${c.transactions})`).join(", ") || "none";
+  const m = S.seen, all = m.counterparties || [], cps = all.length ? `${all.slice(0, 3).map(c => `${c.account_id} (${c.transactions})`).join(", ")}${all.length > 3 ? ` and ${all.length - 3} more` : ""}` : "none";
   body.append(el("p", { class: "big", text: `${m.balance ?? "n/a"}, ${m.transactions} transactions` }));
   const keys = m.access_keys ? `${m.access_keys.full_access} FullAccess, ${m.access_keys.function_call} function-call` : null;
-  const rows = [["Public data only", `read by Qwen3.8-27B in a TEE on NEAR AI Cloud. Counterparties: ${cps}`]];
+  const rows = [["Read", `public data only, by Qwen3.8-27B in a TEE. Top counterparties: ${cps}`]];
   if (keys) rows.push(["Access keys", keys]);
   if (S.enclave) rows.push(["Receipt", el("span", {}, document.createTextNode("enclave key "), code(S.enclave.registered_key, 8, 6), document.createTextNode(" signed request "), code(S.enclave.request_sha256, 8, 4), document.createTextNode(" and response "), code(S.enclave.response_sha256, 8, 4))]);
   body.append(kv(rows));
@@ -365,7 +377,13 @@ function renderChain() {
   $("when-chain").textContent = "";
 }
 
-function renderAll() { renderBrowser(); renderEnclave(); renderChain(); }
+function renderLadder() {
+  const done = { sign: Boolean(S.owner), enclave: Boolean(S.enclave), chain: Boolean(S.tx) };
+  const first = ["sign", "enclave", "chain"].find(k => !done[k]);
+  for (const li of $("ladder").children) { const k = li.dataset.step; li.className = done[k] ? "done" : S.running && k === first ? "active" : ""; }
+}
+
+function renderAll() { renderBrowser(); renderEnclave(); renderChain(); renderLadder(); }
 
 function setStatus(text, kind = "", action) {
   const node = $("status"); node.className = `status ${kind}`; node.replaceChildren(document.createTextNode(text));
@@ -417,6 +435,7 @@ async function streamReview(url, body, { mode, network, onDone, retry }) {
     S.running = false; clearInterval(timer);
     renderAll(); renderDossier();
     setStatus(`${S.tx?.verdict?.ok ? "Verified on NEAR testnet" : "Receipt refused on chain"} in ${seconds(done.total_ms)}${done.notice ? `. ${done.notice}` : ""}`, "", { label: "Read the dossier", run: () => $("dossier").scrollIntoView() });
+    if (S.tx) { $("status").append(document.createTextNode("  "), a(S.tx.explorer, `verify() tx ${short(S.tx.tx_hash, 8, 6)}`)); }
     if (onDone) onDone(done);
     return done;
   } catch (error) {
@@ -477,7 +496,8 @@ async function loadLast() {
     if (!S.proof || !S.seen) { S = emptyState(); renderAll(); return; }
     renderAll();
     for (const id of ["browser", "enclave", "chain"]) $(`when-${id}`).textContent = `Last run ${ageText(last.at)}`;
-    setStatus("These bands hold the last real run. Press the button to run it live, about 25 seconds.");
+    setStatus(`Last verified ${ageText(last.at)} at block ${last.tx.block_height}. Press the button to run it live, about 25 seconds.`);
+    $("status").append(document.createTextNode("  "), a(last.tx.explorer, `verify() tx ${short(last.tx.tx_hash, 8, 6)}`));
   } catch { renderAll(); }
 }
 renderAll(); loadLast();
