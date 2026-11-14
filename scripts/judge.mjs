@@ -61,7 +61,7 @@ await check("live run: signed challenge, enclave receipt, check(), a new verify(
   assert.deepEqual(stages.filter(s => ["sign", "owner", "collect", "enclave", "check", "tx", "dossier", "done"].includes(s)), ["sign", "owner", "collect", "enclave", "check", "tx", "dossier", "done"], `stages ${stages.join(",")}`);
   const tx = events.find(e => e.stage === "tx").tx;
   assert.equal(tx.verdict.ok, true);
-  const chain = await rpc("testnet", "tx", { tx_hash: tx.tx_hash, sender_account_id: DEMO, wait_until: "FINAL" });
+  const chain = await rpc("testnet", "tx", { tx_hash: tx.tx_hash, sender_account_id: tx.signer_id, wait_until: "FINAL" });
   assert.equal(chain.transaction.receiver_id, REGISTRY);
   return `tx ${tx.tx_hash.slice(0, 8)}… final in ${(tx.elapsed_ms / 1000).toFixed(1)} s`;
 });

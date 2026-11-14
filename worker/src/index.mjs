@@ -68,11 +68,12 @@ async function bodyJson(request) {
   try { return JSON.parse(text || "{}"); } catch { throw new HttpError(400, "request body is not valid JSON"); }
 }
 
-function demoSigner(env) {
-  if (!env.DEMO_SIGNER_KEY) throw new HttpError(503, "Demo signer is not configured.");
-  const seed = decodeBase58(env.DEMO_SIGNER_KEY.trim().slice("ed25519:".length)).subarray(0, 32);
+function keyFrom(secret, label) {
+  if (!secret) throw new HttpError(503, `${label} is not configured.`);
+  const seed = decodeBase58(secret.trim().slice("ed25519:".length)).subarray(0, 32);
   return createPrivateKey({ key: Buffer.concat([PKCS8_ED25519, seed]), format: "der", type: "pkcs8" });
 }
+const demoSigner = env => keyFrom(env.DEMO_SIGNER_KEY, "Demo signer");
 
 function signDemoProof(env, claimedAccount) {
   const nonce = randomBytes(32);
@@ -159,7 +160,7 @@ const enclaveSees = bundle => ({
 });
 
 function demoKey(env) {
-  return { signerId: env.DEMO_ACCOUNT, publicKey: env.DEMO_PUBLIC_KEY, privateKey: demoSigner(env) };
+  return { signerId: env.OP_ACCOUNT, publicKey: env.OP_PUBLIC_KEY, privateKey: keyFrom(env.OP_SIGNER_KEY, "Operator signer") };
 }
 
 async function route(request, env) {
