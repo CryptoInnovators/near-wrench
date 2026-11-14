@@ -35,6 +35,12 @@ export class WrenchState extends DurableObject {
       if (dead.length) await this.ctx.storage.delete(dead);
     }
   }
+  async allocNonce(signer, chainNonce) {
+    const key = `nonce:${signer}`;
+    const next = Math.max((await this.ctx.storage.get(key)) ?? 0, chainNonce) + 1;
+    await this.ctx.storage.put(key, next);
+    return next;
+  }
   async putChallenge(id, value) { await this.ctx.storage.put(`challenge:${id}`, value); }
   async takeChallenge(id) {
     const value = await this.ctx.storage.get(`challenge:${id}`);
@@ -161,7 +167,7 @@ const enclaveSees = bundle => ({
 });
 
 function demoKey(env) {
-  return { signerId: env.OP_ACCOUNT, publicKey: env.OP_PUBLIC_KEY, privateKey: keyFrom(env.OP_SIGNER_KEY, "Operator signer") };
+  return { allocateNonce: chainNonce => env.STATE.getByName("wrench").allocNonce(env.OP_ACCOUNT, chainNonce), signerId: env.OP_ACCOUNT, publicKey: env.OP_PUBLIC_KEY, privateKey: keyFrom(env.OP_SIGNER_KEY, "Operator signer") };
 }
 
 async function route(request, env) {

@@ -58,6 +58,8 @@ await check("live run: signed challenge, enclave receipt, check(), a new verify(
   assert.equal(response.status, 200, `HTTP ${response.status}`);
   const events = await readStream(response);
   const stages = events.map(e => e.stage);
+  const failure = events.find(e => e.stage === "error");
+  assert.ok(!failure, `stream error: ${failure?.error}`);
   assert.deepEqual(stages.filter(s => ["sign", "owner", "collect", "enclave", "check", "tx", "dossier", "done"].includes(s)), ["sign", "owner", "collect", "enclave", "check", "tx", "dossier", "done"], `stages ${stages.join(",")}`);
   const tx = events.find(e => e.stage === "tx").tx;
   assert.equal(tx.verdict.ok, true);

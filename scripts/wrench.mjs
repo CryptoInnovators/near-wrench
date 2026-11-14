@@ -348,7 +348,7 @@ export function signedTxBase64(txBytes, privateKey) {
   return Buffer.concat([txBytes, Buffer.from([0]), signature]).toString("base64");
 }
 
-async function awaitFinal(network, txHash, signerId, timeoutMs = 45_000) {
+async function awaitFinal(network, txHash, signerId, timeoutMs) {
   const deadline = Date.now() + timeoutMs;
   let last = "not yet included";
   while (Date.now() < deadline) {
@@ -362,7 +362,9 @@ async function awaitFinal(network, txHash, signerId, timeoutMs = 45_000) {
       last = error.message.slice(0, 80);
     }
   }
-  throw new Error(`Transaction ${txHash} was sent but did not finalize within ${timeoutMs / 1000} s (last status: ${last}). Check it on the explorer.`);
+  const stalled = new Error(`Transaction ${txHash} was sent but did not finalize within ${timeoutMs / 1000} s (last status: ${last}). Check it on the explorer.`);
+  stalled.stalled = true;
+  throw stalled;
 }
 
 const lastNonce = new Map();
@@ -370,7 +372,7 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 const transient = error => /HTTP 429|HTTP 5\d\d|Rate limit|timed out|timeout|fetch failed|aborted|ECONN/i.test(error.message);
 
-export async function sendFunctionCall({ network = "testnet", signerId, publicKey, privateKey, receiverId, methodName, args, gas = 30_000_000_000_000n, deposit = 0n, timings = {} }) {
+export async function sendFunctionCall({ network = "testnet", signerId, publicKey, privateKey, receiverId, methodName, args, gas = 30_000_000_000_000n, deposit = 0n, timings = {}, allocateNonce = null, finalityTimeoutMs = 20_000 }) {
   let failure;
   const t0 = Date.now();
   for (let attempt = 0; attempt < 6; attempt += 1) {
@@ -379,7 +381,7 @@ export async function sendFunctionCall({ network = "testnet", signerId, publicKe
     try { key = await rpc(network, "query", { request_type: "view_access_key", finality: "final", account_id: signerId, public_key: publicKey }); }
     catch (error) { failure = error; if (transient(error)) continue; throw error; }
     timings.key_ms = Date.now() - t0; timings.attempts = attempt + 1;
-    const nonce = Math.max(Number(key.nonce), lastNonce.get(signerId) ?? 0) + 1;
+    const nonce = allocateNonce ? await allocateNonce(Number(key.nonce)) : Math.max(Number(key.nonce), lastNonce.get(signerId) ?? 0) + 1;
     lastNonce.set(signerId, nonce);
     const tx = encodeFunctionCallTx({ signerId, publicKey, nonce, receiverId, blockHash: key.block_hash, methodName, args: JSON.stringify(args), gas, deposit });
     try {
@@ -387,11 +389,12 @@ export async function sendFunctionCall({ network = "testnet", signerId, publicKe
       await rpc(network, "send_tx", { signed_tx_base64: signedTxBase64(tx, privateKey), wait_until: "NONE" });
       timings.send_ms = Date.now() - sent;
       const polled = Date.now();
-      const result = await awaitFinal(network, encodeBase58(createHash("sha256").update(tx).digest()), signerId);
+      const result = await awaitFinal(network, encodeBase58(createHash("sha256").update(tx).digest()), signerId, finalityTimeoutMs);
       timings.final_ms = Date.now() - polled;
       return result;
     } catch (error) {
       failure = error;
+      if (error.stalled) continue;
       if (/InvalidNonce|nonce/i.test(error.message)) { lastNonce.delete(signerId); await sleep(150 + Math.floor(Math.random() * 350)); continue; }
       if (!transient(error)) throw error;
     }
@@ -401,11 +404,11 @@ export async function sendFunctionCall({ network = "testnet", signerId, publicKe
 
 export const txUrl = (network, hash) => `https://${network === "testnet" ? "testnet." : ""}nearblocks.io/txns/${hash}`;
 
-export async function verifyOnChain({ attestation, signerId, publicKey, privateKey, network = "testnet" }) {
+export async function verifyOnChain({ attestation, signerId, publicKey, privateKey, network = "testnet", allocateNonce = null }) {
   const started = Date.now();
   const timings = {};
   const outcome = await sendFunctionCall({
-    timings, network, signerId, publicKey, privateKey, receiverId: attestation.registry, methodName: "verify",
+    timings, allocateNonce, network, signerId, publicKey, privateKey, receiverId: attestation.registry, methodName: "verify",
     args: {
       public_key: attestation.registered_key, model_id: attestation.model, request_sha256: attestation.request_sha256,
       response_sha256: attestation.response_sha256, signature: attestation.signature.replace(/^0x/, ""), required_platform: null, required_app_id: null,
