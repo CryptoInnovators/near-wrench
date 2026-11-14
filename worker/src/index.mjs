@@ -111,7 +111,7 @@ async function runPipeline({ env, state, emit = noop, proof, network, linked = [
   }
   const tx = await verifyOnChain({ attestation, ...demoKey(env) });
   await emit({ stage: "tx", tx, at_ms: Date.now() - t0 });
-  if (saveLast && !replay) await state.saveLast({ at, network, demo_account: proof.accountId, ownership: owner, evidence, enclave_sees: seen, dossier, attestation, tx });
+  if (saveLast && !replay) await state.saveLast({ at, network, demo_account: proof.accountId, ownership: owner, evidence, enclave_sees: seen, proof: proofView, dossier, attestation, tx });
   await emit({ stage: "dossier", dossier, evidence, attestation: { ...attestation, signature: undefined }, at, at_ms: Date.now() - t0 });
   return { owner, balance, total_ms: Date.now() - t0, fresh: !replay };
 }
@@ -171,7 +171,7 @@ async function route(request, env) {
   if (method === "GET" && path === "/api/last") {
     const last = await state.getLast();
     if (!last?.tx) return json(200, { last: null });
-    return json(200, { last: { at: last.at, demo_account: last.demo_account, ownership: last.ownership, enclave_sees: last.enclave_sees ?? null, attestation: { model: last.attestation.model, registry: last.attestation.registry, registered_key: last.attestation.registered_key, request_sha256: last.attestation.request_sha256, response_sha256: last.attestation.response_sha256, verdict: last.attestation.verdict, verdict_block: last.attestation.verdict_block }, tx: last.tx } });
+    return json(200, { last: { at: last.at, demo_account: last.demo_account, ownership: last.ownership, enclave_sees: last.enclave_sees ?? null, proof: last.proof ?? null, attestation: { model: last.attestation.model, registry: last.attestation.registry, registered_key: last.attestation.registered_key, request_sha256: last.attestation.request_sha256, response_sha256: last.attestation.response_sha256, verdict: last.attestation.verdict, verdict_block: last.attestation.verdict_block }, tx: last.tx } });
   }
 
   if (method === "POST" && path === "/api/demo") {

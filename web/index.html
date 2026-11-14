@@ -1,327 +1,566 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#fffdfc">
-  <title>Wrench: Private wallet exposure review</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27 fill=%27none%27%3E%3Cpath d=%27M14.4 6.2a5.2 5.2 0 0 0-6.8 6.6L3.2 17.2a2 2 0 0 0 2.8 2.8l4.4-4.4a5.2 5.2 0 0 0 6.6-6.8l-3.1 3.1-3.2-3.2 3.7-2.5Z%27 stroke=%27%23ff385c%27 stroke-width=%271.8%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27/%3E%3C/svg%3E">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <style>
-    :root {
-      color-scheme: light;
-      --color-canvas:#fffdfc; --color-surface:#fff; --color-surface-soft:#f7f7f7;
-      --color-ink:#222; --color-muted:#6a6a6a; --color-line:#dedede;
-      --color-accent:#ff385c; --color-accent-active:#e00b41; --color-accent-soft:#fff0f3;
-      --color-positive:#176b46; --color-positive-soft:#e9f5ee;
-      --color-warning:#8a3a20; --color-warning-soft:#fff2e9;
-      --color-control-line:#b9b9b9; --color-focus:#ff9bad; --color-ink-hover:#444; --color-white:#fff;
-      --surface:var(--color-surface);
-      --font-display:"DM Sans",sans-serif; --font-body:"DM Sans",sans-serif; --font-mono:"DM Mono",monospace;
-      --radius-control:8px; --radius-panel:14px; --radius-pill:999px;
-      --space-1:4px; --space-2:8px; --space-3:12px; --space-4:16px;
-      --space-6:24px; --space-8:32px; --space-12:48px; --space-16:64px;
-    }
-    @layer base {
-      *,*::before,*::after { box-sizing:border-box; }
-      html,body { margin:0; min-height:100%; overflow-x:clip; }
-      body { background:var(--color-canvas); color:var(--color-ink); font-family:var(--font-body); font-size:14px; line-height:1.55; }
-      button,input,textarea { font:inherit; }
-      h1,h2,h3,p { margin:0; }
-    }
-    a { color:inherit; }
-    .shell { width:min(1240px,calc(100% - 48px)); margin-inline:auto; }
-    .topbar { min-height:68px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--color-line); }
-    .brand { display:inline-flex; align-items:center; gap:10px; text-decoration:none; font-size:16px; font-weight:700; letter-spacing:-.03em; }
-    .brand-mark { width:20px; height:20px; color:var(--color-accent); }
-    .top-note,.rail-copy,.intro p,.section-head p { color:var(--color-muted); }
-    .top-note { font-size:13px; }
-    .layout { display:grid; grid-template-columns:240px minmax(0,1fr); gap:40px; padding:48px 0 72px; align-items:start; }
-    .rail { position:sticky; top:24px; display:grid; gap:20px; }
-    .rail h2,.source h2,.section-head h2 { font-size:18px; line-height:1.3; font-weight:600; }
-    .field { display:grid; gap:8px; }
-    label { font-size:13px; font-weight:600; }
-    input,textarea { width:100%; border:1px solid var(--color-control-line); border-radius:var(--radius-control); background:var(--color-surface); color:var(--color-ink); padding:11px 12px; outline:none; }
-    input { min-height:44px; }
-    textarea { min-height:116px; resize:vertical; font:12px/1.5 var(--font-mono); }
-    input:focus-visible,textarea:focus-visible,button:focus-visible,a:focus-visible { outline:3px solid var(--color-focus); outline-offset:2px; }
-    .button { min-height:44px; border:0; border-radius:var(--radius-control); padding:10px 16px; background:var(--color-accent); color:var(--color-ink); font-weight:600; cursor:pointer; text-align:center; transition:background-color 180ms ease,transform 180ms ease; }
-    .button:hover:not(:disabled) { background:var(--color-accent-active); }
-    .button:active:not(:disabled) { transform:translateY(1px); }
-    .button.secondary { background:var(--color-ink); color:var(--color-white); }
-    .button.secondary:hover:not(:disabled) { background:var(--color-ink-hover); }
-    .button:disabled { opacity:.48; cursor:not-allowed; }
-    .button-row { display:grid; gap:10px; }
-    .consent { padding:14px; border-radius:var(--radius-panel); background:var(--color-surface-soft); color:var(--color-muted); font-size:12px; }
-    .main { min-width:0; }
-    .intro { display:grid; grid-template-columns:minmax(0,1fr) minmax(220px,.62fr); gap:32px; align-items:end; padding-bottom:32px; }
-    h1 { max-width:620px; font:600 30px/1.15 var(--font-display); letter-spacing:-.035em; }
-    .intro p { max-width:420px; }
-    .source { padding:20px 22px; border-radius:var(--radius-panel); background:var(--color-surface-soft); display:grid; gap:12px; }
-    .source-stat { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
-    .source-stat p { color:var(--color-muted); font-size:13px; }
-    .source-stat strong { display:block; color:var(--color-ink); font-size:20px; line-height:1.2; font-weight:600; font-variant-numeric:tabular-nums; }
-    .source cite { font-style:normal; color:var(--color-muted); font-size:12px; }
-    .source a { text-underline-offset:3px; }
-    .section { margin-top:32px; padding:24px; border-radius:var(--radius-panel); background:var(--surface); border:1px solid var(--color-line); }
-    .section-head { display:flex; justify-content:space-between; gap:16px; align-items:start; margin-bottom:20px; }
-    .section-head p { margin-top:4px; }
-    .status { display:inline-flex; align-items:center; min-height:24px; padding:2px 10px; border-radius:var(--radius-pill); background:var(--color-surface-soft); color:var(--color-muted); font-size:12px; font-weight:600; white-space:nowrap; }
-    .status.ok { background:var(--color-positive-soft); color:var(--color-positive); }
-    .summary { font-size:16px; line-height:1.5; }
-    .dossier-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:24px; margin-top:24px; }
-    .dossier-block { min-width:0; }
-    .dossier-block h3 { font-size:14px; margin-bottom:10px; }
-    .dossier-block ul { margin:0; padding-left:18px; display:grid; gap:8px; }
-    .dossier-block li { padding-left:2px; }
-    .dossier-block li span { display:block; color:var(--color-muted); font-size:12px; }
-    .mono { font:12px/1.6 var(--font-mono); overflow-wrap:anywhere; }
-    .small-note,.evidence-foot { color:var(--color-muted); font-size:12px; }
-    .quote-form { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:12px; align-items:end; }
-    .quote-result { margin-top:18px; padding:16px; border-radius:var(--radius-control); background:var(--color-surface-soft); white-space:pre-wrap; overflow-wrap:anywhere; font:12px/1.55 var(--font-mono); }
-    .evidence-foot { margin-top:28px; }
-    .notice { min-height:22px; margin-top:12px; color:var(--color-muted); font-size:13px; }
-    .notice.error { color:var(--color-warning); }
-    .notice.success { color:var(--color-positive); }
-    .demo { margin-top:0; margin-bottom:32px; border-color:var(--color-ink); }
-    .demo-actions { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
-    .demo-actions .button { min-width:220px; }
-    .refuse-row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:12px; align-items:end; margin-top:24px; padding-top:20px; border-top:1px solid var(--color-line); }
-    .onchain { margin-top:24px; padding:18px 20px; border-radius:var(--radius-control); background:var(--color-surface-soft); }
-    .onchain h3 { font-size:14px; margin-bottom:12px; display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
-    .onchain dl { margin:0; display:grid; grid-template-columns:150px minmax(0,1fr); gap:8px 16px; }
-    .onchain dt { color:var(--color-muted); font-size:12px; }
-    .onchain dd { margin:0; }
-    .replay { margin-top:16px; padding:12px 14px; border-radius:var(--radius-control); background:var(--color-positive-soft); color:var(--color-positive); font-size:13px; }
-    [hidden] { display:none!important; }
-    @media(max-width:900px) {
-      .layout { grid-template-columns:1fr; gap:32px; padding-top:32px; }
-      .rail { position:static; display:grid; grid-template-columns:1fr 1fr; gap:16px 24px; }
-      .rail h2,.rail-copy,.consent { grid-column:1/-1; }
-      .intro { grid-template-columns:1fr; gap:14px; }
-    }
-    @media(max-width:600px) {
-      .shell { width:calc(100% - 32px); }
-      .topbar { min-height:60px; }
-      .top-note { display:none; }
-      .layout { padding:24px 0 48px; gap:24px; }
-      .rail { grid-template-columns:1fr; }
-      .rail h2,.rail-copy,.consent { grid-column:auto; }
-      h1 { font-size:28px; }
-      .source-stat { gap:12px; }
-      .source-stat strong { font-size:18px; }
-      .section { padding:18px; margin-top:20px; }
-      .section-head { flex-direction:column; }
-      .dossier-grid,.quote-form,.refuse-row { grid-template-columns:1fr; gap:20px; }
-      .onchain dl { grid-template-columns:1fr; gap:2px 0; }
-      .onchain dd { margin-bottom:10px; }
-    }
-    @media(prefers-reduced-motion:reduce) { *,*::before,*::after { animation-duration:.01ms!important; animation-iteration-count:1!important; transition-duration:.01ms!important; scroll-behavior:auto!important; } }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#eceef0">
+<title>Wrench</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27 fill=%27none%27%3E%3Cpath d=%27M14.4 6.2a5.2 5.2 0 0 0-6.8 6.6L3.2 17.2a2 2 0 0 0 2.8 2.8l4.4-4.4a5.2 5.2 0 0 0 6.6-6.8l-3.1 3.1-3.2-3.2 3.7-2.5Z%27 stroke=%27%230f1318%27 stroke-width=%271.8%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --ground: #eceef0; --white: #ffffff; --ink: #0f1318; --grey: #d9dde1; --accent: #ff5a1f;
+  --gutter: clamp(16px, 4vw, 56px);
+  --font: "DM Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--ground); color: var(--ink); font: 400 16px/1.55 var(--font); -webkit-font-smoothing: antialiased; }
+[hidden] { display: none !important; }
+a { color: inherit; text-underline-offset: 3px; text-decoration-thickness: 2px; }
+a:hover { color: var(--accent); }
+code { font: 13px/1.5 ui-monospace, "SF Mono", Menlo, Consolas, monospace; overflow-wrap: anywhere; }
+button, input { font: inherit; color: inherit; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+.bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px var(--gutter); }
+.mark { font-weight: 700; font-size: 22px; letter-spacing: -0.03em; text-decoration: none; }
+.bar nav { display: flex; gap: 28px; flex-wrap: wrap; font-weight: 500; }
+.bar nav a { text-decoration: none; }
+.bar nav a:hover { text-decoration: underline; }
+.net { font-weight: 500; }
+@media (max-width: 760px) { .bar nav { display: none; } }
+
+.hero { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); grid-template-areas: "pitch trace" "points trace"; grid-template-rows: auto 1fr; column-gap: clamp(24px, 4vw, 64px); padding: 12px var(--gutter) 96px; align-items: start; }
+.pitch { grid-area: pitch; padding-top: 24px; }
+.points { grid-area: points; }
+.trace { grid-area: trace; }
+h1 { margin: 0; font-size: clamp(44px, 5.2vw, 80px); line-height: 0.98; letter-spacing: -0.045em; font-weight: 700; }
+.lead { margin: 28px 0 0; font-size: 20px; line-height: 1.45; max-width: 30em; }
+.actions { margin-top: 32px; display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; }
+.primary { background: var(--accent); color: var(--ink); border: 0; border-radius: 0; padding: 0 28px; min-height: 56px; font-weight: 700; font-size: 18px; cursor: pointer; }
+.primary:hover:not(:disabled) { background: var(--ink); color: var(--white); }
+.primary:disabled { cursor: progress; background: var(--ink); color: var(--white); }
+.alt { font-weight: 500; }
+.status { margin: 20px 0 0; min-height: 3.2em; font-weight: 500; max-width: 32em; }
+.status.error { background: var(--accent); padding: 12px 14px; }
+.status .retry { font: inherit; font-weight: 700; background: none; border: 0; padding: 0; text-decoration: underline; cursor: pointer; }
+
+.points { margin-top: 36px; display: grid; gap: 14px; max-width: 32em; }
+.points p { margin: 0; }
+.trace { display: grid; gap: 0; }
+.band { padding: clamp(16px, 2vw, 26px) clamp(18px, 2.4vw, 32px); }
+.band header { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; flex-wrap: wrap; margin-bottom: 8px; }
+.big { margin: 0 0 6px; font-size: clamp(26px, 2.6vw, 38px); line-height: 1.05; letter-spacing: -0.035em; font-weight: 700; max-width: none; overflow-wrap: anywhere; }
+.band h2 { margin: 0; font-size: 22px; line-height: 1.1; letter-spacing: -0.03em; font-weight: 700; }
+.band .when { font-size: 14px; font-weight: 500; }
+.b-browser { background: var(--white); }
+.b-enclave { background: var(--ink); color: var(--white); }
+.b-chain { background: var(--grey); }
+.b-enclave a:hover { color: var(--accent); }
+.band p { margin: 0 0 10px; max-width: 46em; }
+.kv { display: grid; grid-template-columns: minmax(7em, 9em) minmax(0, 1fr); gap: 4px 16px; margin: 8px 0 0; font-size: 15px; }
+.kv dt { font-weight: 700; }
+.kv dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.pending { display: flex; align-items: center; gap: 12px; font-weight: 500; }
+.pending::before { content: ""; flex: none; width: 36px; height: 6px; background: currentColor; animation: slide 1s steps(6) infinite alternate; transform-origin: left; }
+@keyframes slide { from { transform: scaleX(0.15); } to { transform: scaleX(1); } }
+@media (prefers-reduced-motion: reduce) { .pending::before { animation: none; } html { scroll-behavior: auto; } }
+.bar-redact { display: inline-block; vertical-align: middle; height: 1.15em; width: min(16em, 100%); background: var(--ink); }
+.tx-link { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; display: inline-block; margin: 4px 0 6px; overflow-wrap: anywhere; }
+.verdict { font-weight: 700; }
+.verdict.ok::before { content: "ok "; }
+.refused { background: var(--accent); }
+.lastnote { font-weight: 500; }
+
+section.page { padding: 96px var(--gutter); }
+section.page h2 { margin: 0 0 12px; font-size: clamp(30px, 4vw, 56px); line-height: 1; letter-spacing: -0.04em; font-weight: 700; max-width: 18em; }
+section.page > .intro { font-size: 20px; max-width: 34em; margin: 0 0 40px; }
+.field-white { background: var(--white); }
+.field-ink { background: var(--ink); color: var(--white); }
+.field-ink a:hover { color: var(--accent); }
+
+.dossier-grid { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: clamp(24px, 4vw, 72px); }
+.worth { font-size: clamp(28px, 3.4vw, 52px); font-weight: 700; letter-spacing: -0.04em; line-height: 1; margin: 20px 0 8px; }
+.summary { font-size: 20px; line-height: 1.5; margin: 0 0 24px; }
+.leaks { list-style: none; margin: 0; padding: 0; display: grid; gap: 32px; }
+.leaks h3 { margin: 0 0 6px; font-size: 24px; letter-spacing: -0.03em; line-height: 1.15; }
+.leaks p { margin: 0 0 8px; }
+.leaks .act { font-weight: 700; }
+.small-list { margin: 0 0 20px; padding-left: 1.1em; }
+.seal { display: inline-block; background: var(--ink); color: var(--white); padding: 8px 14px; font-weight: 700; margin-bottom: 20px; }
+.seal a { color: var(--white); }
+.seal a:hover { color: var(--accent); }
+
+.breaks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(24px, 4vw, 72px); }
+.breaks h3 { margin: 0 0 8px; font-size: 28px; letter-spacing: -0.03em; line-height: 1.1; }
+.breaks p { margin: 0 0 16px; max-width: 30em; }
+.secondary { background: var(--white); color: var(--ink); border: 0; padding: 0 24px; min-height: 52px; font-weight: 700; cursor: pointer; border-radius: 0; }
+.secondary:hover:not(:disabled) { background: var(--accent); }
+.secondary:disabled { cursor: progress; opacity: 0.6; }
+.field-white .secondary, .b-chain .secondary { background: var(--ink); color: var(--white); }
+.field-white .secondary:hover:not(:disabled) { background: var(--accent); color: var(--ink); }
+.inline-form { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+.inline-form input { flex: 1 1 14em; min-width: 0; min-height: 52px; padding: 0 14px; border: 0; background: var(--white); color: var(--ink); border-radius: 0; }
+.out { margin-top: 18px; min-height: 2em; }
+.out .refused { padding: 14px 16px; color: var(--ink); }
+.out .refused strong { display: block; font-size: 22px; letter-spacing: -0.02em; margin-bottom: 4px; }
+.out .refused a:hover { color: var(--white); }
+
+.seg { display: inline-flex; margin: 0 0 20px; }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg label { padding: 12px 22px; background: var(--grey); font-weight: 700; cursor: pointer; }
+.seg input:checked + label { background: var(--ink); color: var(--white); }
+.seg input:focus-visible + label { outline: 3px solid var(--accent); outline-offset: 2px; }
+details.manual { margin-top: 28px; max-width: 46em; }
+details.manual summary { cursor: pointer; font-weight: 700; }
+details.manual textarea { width: 100%; min-height: 120px; margin: 10px 0; padding: 12px; background: var(--ground); border: 0; border-radius: 0; font: 13px/1.5 ui-monospace, Menlo, monospace; color: var(--ink); }
+.manual-row { display: flex; gap: 12px; flex-wrap: wrap; margin: 12px 0; }
+.manual-row input { flex: 1 1 16em; min-height: 48px; padding: 0 14px; border: 0; background: var(--ground); color: var(--ink); border-radius: 0; }
+.quote-pre { background: var(--ground); color: var(--ink); padding: 16px; margin: 16px 0 0; overflow-x: auto; max-width: 100%; }
+
+footer { padding: 72px var(--gutter) 40px; }
+footer .big { font-size: clamp(72px, 24vw, 360px); line-height: 0.82; letter-spacing: -0.07em; font-weight: 700; margin: 0 0 32px; }
+footer .links { display: flex; gap: 12px 32px; flex-wrap: wrap; font-weight: 500; }
+
+@media (max-width: 980px) {
+  .hero, .dossier-grid, .breaks { grid-template-columns: minmax(0, 1fr); }
+  .hero { grid-template-areas: "pitch" "trace" "points"; grid-template-rows: auto; row-gap: 28px; padding-bottom: 56px; }
+  .pitch { padding-top: 8px; }
+  .lead { font-size: 17px; margin-top: 14px; }
+  .actions { margin-top: 18px; }
+  .primary { min-height: 52px; font-size: 17px; }
+  .status { margin-top: 12px; min-height: 2.4em; }
+  .points { margin-top: 0; }
+  section.page { padding-block: 64px; }
+  .kv { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .kv dd { margin-bottom: 8px; }
+}
+</style>
 </head>
 <body>
-  <header class="shell topbar">
-    <a class="brand" href="/" aria-label="Wrench home"><svg class="brand-mark" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M14.4 6.2a5.2 5.2 0 0 0-6.8 6.6L3.2 17.2a2 2 0 0 0 2.8 2.8l4.4-4.4a5.2 5.2 0 0 0 6.6-6.8l-3.1 3.1-3.2-3.2 3.7-2.5Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Wrench</a>
-    <span class="top-note">A private exposure review for your NEAR account</span>
-  </header>
-  <main class="shell layout">
-    <aside class="rail" aria-labelledby="review-title">
-      <h2 id="review-title">Review your own account</h2>
-      <p class="rail-copy">Prove ownership with a one-time NEP-413 signature. The signed message authorizes this review only.</p>
-      <div class="field"><label for="account">NEAR account</label><input id="account" name="account" autocomplete="off" spellcheck="false" placeholder="name.near" required></div>
-      <div class="button-row"><button id="connect" class="button" type="button">Connect and sign</button><button id="paste-toggle" class="button secondary" type="button">Paste signed message</button></div>
-      <div id="paste-box" class="field" hidden><label for="sign-request">One-time signing request</label><textarea id="sign-request" readonly></textarea><button id="copy-sign-request" class="button secondary" type="button">Copy signing request</button><label for="signed-proof">Signed message JSON</label><textarea id="signed-proof" spellcheck="false" placeholder='{"accountId":"name.near","publicKey":"ed25519:...","signature":"..."}'></textarea><button id="submit-proof" class="button secondary" type="button">Verify and review</button></div>
-      <p id="action-status" class="notice" role="status" aria-live="polite">Your signature is checked against the account’s live FullAccess keys before any data is collected.</p>
-      <p class="consent">Only public chain and profile data is collected. Coverage includes up to 20 recent transactions, balances, holdings, staking pools, and NEAR Social profile. Intents history is not included. The dossier request goes to NEAR AI and must pass the Sworn TEE registry check before it appears here. A confidential quote asks for a second empty-intent signature, and your key must be registered on intents.near.</p>
-    </aside>
-    <div class="main">
-      <section class="intro" aria-labelledby="page-title"><h1 id="page-title">Audit your wallet exposure privately, on a TEE.</h1><p>Sign once to prove you own the account. A model on NEAR AI Cloud reads your public activity inside a TEE, and its signed receipt is checked against the on-chain registry before you see the dossier. Then quote a confidential 1Click move.</p></section>
-      <section id="demo" class="section surface demo" aria-labelledby="demo-title">
-        <div class="section-head"><div><h2 id="demo-title">Run it now, no wallet needed</h2><p>Wrench signs for a testnet demo account, checks that signature against the account’s FullAccess key on chain, has a model read the account inside a TEE, and verifies the TEE receipt against the Sworn registry contract.</p></div><span class="status badge">NEAR testnet</span></div>
-        <div class="demo-actions"><button id="demo-run" class="button" type="button">Run the demo review</button><button id="demo-fresh" class="button secondary" type="button">Run a fresh model call</button></div>
-        <p id="demo-status" class="notice" role="status" aria-live="polite">The result shows the registry’s on-chain verdict, read at the current block. A fresh model call takes 20 to 90 seconds.</p>
-        <form id="unowned-form" class="refuse-row"><div class="field"><label for="unowned">Try an account you do not own</label><input id="unowned" name="unowned" autocomplete="off" spellcheck="false" placeholder="near.testnet" required></div><button id="unowned-run" class="button secondary" type="submit">Try to review it</button></form>
-        <pre id="refusal" class="quote-result" aria-live="polite" hidden></pre>
-      </section>
-      <section class="source surface" aria-labelledby="risk-title">
-        <h2 id="risk-title">Physical attacks are part of the threat model</h2>
-        <div class="source-stat"><p><strong>37+</strong>wrench attacks in Britain, averaging $700,000 per attack</p><p><strong>90</strong>kidnappings, extortions, and violent robberies in France this year, with $124 million in losses</p></div>
-        <cite>From <a href="https://spectator.com/article/grand-theft-crypto/" target="_blank" rel="noreferrer">The Spectator, “The rise of crypto kidnappings”</a>. Issue dated 7 November 2026, checked 13 November 2026.</cite>
-      </section>
-      <section id="dossier-panel" class="section surface" aria-labelledby="dossier-title" hidden>
-        <div class="section-head"><div><h2 id="dossier-title">Your exposure dossier</h2><p id="dossier-account" class="mono"></p></div><span id="attested-status" class="status badge">Awaiting verification</span></div>
-        <p id="summary" class="summary"></p>
-        <div class="dossier-grid">
-          <div class="dossier-block"><h3>Estimated net worth</h3><p id="worth"></p><p id="worth-basis" class="small-note"></p></div>
-          <div class="dossier-block"><h3>Uncertainty</h3><p id="uncertainty"></p></div>
-          <div class="dossier-block"><h3>Identity links</h3><ul id="identities"></ul></div>
-          <div class="dossier-block"><h3>Location signals</h3><ul id="locations"></ul></div>
-          <div class="dossier-block"><h3>Links that leak most</h3><ul id="leaks"></ul></div>
-        </div>
-        <div id="replay" class="replay" hidden></div>
-        <div class="onchain" aria-labelledby="onchain-title">
-          <h3 id="onchain-title">On-chain result <span id="verdict-badge" class="status badge"></span></h3>
-          <dl>
-            <dt>Registry verdict</dt><dd id="oc-verdict" class="mono"></dd>
-            <dt>Read at block</dt><dd id="oc-block" class="mono"></dd>
-            <dt>Registered key</dt><dd id="oc-key" class="mono"></dd>
-            <dt>Request SHA-256</dt><dd id="oc-req" class="mono"></dd>
-            <dt>Response SHA-256</dt><dd id="oc-res" class="mono"></dd>
-            <dt>Account ownership</dt><dd id="oc-owner" class="mono"></dd>
-          </dl>
-        </div>
-        <p class="evidence-foot">Model response verified by the registered Sworn provider key. Model: <span id="attested-model"></span>. Registry: <a id="registry-link" href="https://explorer.testnet.near.org/accounts/sworn-reg7-1113.testnet" target="_blank" rel="noreferrer">sworn-reg7-1113.testnet</a>. Evidence references point to collected source paths.</p>
-      </section>
-      <section class="section surface" aria-labelledby="dark-title">
-        <div class="section-head"><div><h2 id="dark-title">Go dark with a confidential quote</h2><p>Get a 1Click quote to move NEAR into your confidential balance. A second wallet signature is required. This requests a quote only.</p></div><span class="status badge">1Click · confidential</span></div>
-        <form id="quote-form" class="quote-form"><div class="field"><label for="amount">Amount in NEAR</label><input id="amount" name="amount" inputmode="decimal" autocomplete="off" placeholder="0.1" required></div><button id="quote-button" class="button" type="submit" disabled>Request quote</button></form>
-        <p id="quote-status" class="notice" role="status" aria-live="polite">Complete an attested dossier first to unlock a quote.</p>
-        <pre id="quote-result" class="quote-result" aria-live="polite" hidden></pre>
-      </section>
+<header class="bar">
+  <a class="mark" href="#top">Wrench</a>
+  <nav aria-label="Sections"><a href="#break">Break it</a><a href="#wallet">Your wallet</a><a href="#dossier">Dossier</a></nav>
+  <span class="net">NEAR testnet</span>
+</header>
+<main id="top">
+  <section class="hero" aria-labelledby="title">
+    <div class="pitch">
+      <h1 id="title">Audit your wallet privately.</h1>
+      <p class="lead">A model reads your account's exposure inside a TEE. NEAR's Sworn registry verifies its signed receipt in a real transaction before you see a word.</p>
+      <div class="actions">
+        <button id="run" class="primary" type="button">Review a testnet account</button>
+        <a class="alt" href="#wallet">Use my own wallet</a>
+      </div>
+      <p id="status" class="status" role="status" aria-live="polite">Runs live on NEAR testnet in about 25 seconds.</p>
     </div>
-  </main>
-  <script type="module">
-    const $ = id => document.getElementById(id);
-    let challengeId = null, activePayload = null, session = null, connectedWallet = null;
-    const setStatus = (id, message, kind = "") => { const node = $(id); node.textContent = message; node.className = `notice ${kind}`; };
-    async function challenge(accountId) {
-      if (!/^[a-z0-9._-]{2,64}$/.test(accountId)) throw new Error("Enter a valid NEAR account ID first.");
-      const response = await fetch(`/api/challenge?accountId=${encodeURIComponent(accountId)}`), body = await response.json();
-      if (!response.ok) throw new Error(body.error || "Could not create a signing challenge.");
-      challengeId = body.challengeId; activePayload = body.payload; sessionStorage.setItem("wrench-challenge", challengeId); sessionStorage.setItem("wrench-account", accountId);
-      return body.payload;
-    }
-    async function requestDossier(proof) {
-      setStatus("action-status", "Checking the signature and collecting public account data…");
-      const response = await fetch("/api/dossier", { method:"POST", headers:{"content-type":"application/json"}, body:JSON.stringify({challengeId,proof}) }), body = await response.json();
-      if (!response.ok) throw new Error(body.error || "The dossier could not be verified.");
-      session = body.session; renderDossier(body.dossier, proof.accountId, body.attestation); renderOnchain(body.attestation, body.ownership); $("dossier-panel").hidden = false; $("quote-button").disabled = false;
-      setStatus("action-status", "Ownership verified and dossier attested.", "success"); setStatus("quote-status", "Enter an amount to request a confidential quote.");
-      $("dossier-panel").scrollIntoView({behavior:"smooth",block:"start"});
-    }
-    async function wallet() {
-      if (!connectedWallet) {
-        const [{ setupWalletSelector }, { setupMyNearWallet }] = await Promise.all([import("https://esm.sh/@near-wallet-selector/core@10.1.4"), import("https://esm.sh/@near-wallet-selector/my-near-wallet@10.1.4")]);
-        const selector=await setupWalletSelector({network:{networkId:"mainnet",nodeUrl:"https://rpc.mainnet.fastnear.com",helperUrl:"https://helper.mainnet.near.org",explorerUrl:"https://nearblocks.io"},modules:[setupMyNearWallet()]});
-        connectedWallet=await selector.wallet("my-near-wallet");
-      }
-      return connectedWallet;
-    }
-    async function signIntentsOwnership(accountId) {
-      const { createIntentSignerNEP413, IntentsSDK, VersionedNonceBuilder } = await import("https://esm.sh/@defuse-protocol/intents-sdk@0.96.0?bundle");
-      const intents=new IntentsSDK({referral:"wrench"}), userWallet=await wallet();
-      const signer=createIntentSignerNEP413({accountId,signMessage:async payload=>{
-        const message=payload.payload??payload, nonce=message.nonce instanceof Uint8Array?message.nonce:Array.isArray(message.nonce)?Uint8Array.from(message.nonce):Uint8Array.from(atob(message.nonce),char=>char.charCodeAt(0));
-        const signed=await userWallet.signMessage({message:message.message,nonce,recipient:message.recipient,callbackUrl:message.callback_url||message.callbackUrl||undefined});
-        const raw=signed.signature instanceof Uint8Array?btoa(String.fromCharCode(...signed.signature)):signed.signature;
-        return {publicKey:signed.publicKey.toString(),signature:raw};
-      }});
-      const {signed}=await intents.intentBuilder().setDeadline(new Date(Date.now()+5*60_000)).setNonceRandomBytes(VersionedNonceBuilder.createTimestampedNonceBytes(new Date())).buildAndSign(signer);
-      const response=await fetch("/api/quote-session",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({session,signedData:signed})}), body=await response.json();
-      if(!response.ok) throw new Error(body.error||"1Click authentication failed. Your NEAR key may need registration on intents.near.");
-    }
-    function addRows(id, rows, format) {
-      const list = $(id); list.replaceChildren();
-      if (!rows?.length) { const item = document.createElement("li"); item.textContent = "No supported signals in the collected evidence."; list.append(item); return; }
-      for (const row of rows) { const item = document.createElement("li"), text = document.createElement("div"), evidence = document.createElement("span"); text.textContent = format(row); evidence.textContent = `Evidence: ${(row.evidence_ids||[]).join(", ")||"not supplied"}`; item.append(text,evidence); list.append(item); }
-    }
-    const scan = network => network === "testnet" ? "https://testnet.nearblocks.io" : "https://nearblocks.io";
-    function link(href, text) { const a = document.createElement("a"); a.href = href; a.target = "_blank"; a.rel = "noreferrer"; a.textContent = text; return a; }
-    function renderOnchain(attestation, ownership, replayNotice) {
-      const verdict = attestation.verdict || {}, block = attestation.verdict_block || {};
-      $("verdict-badge").textContent = verdict.ok ? "CHECK PASSED" : "CHECK FAILED"; $("verdict-badge").className = `status badge ${verdict.ok ? "ok" : ""}`;
-      $("oc-verdict").replaceChildren(link(`${scan("testnet")}/address/${attestation.registry}`, attestation.registry), document.createTextNode(` check() → ok:${verdict.ok} reason:${verdict.reason}${verdict.hf_revision ? ` · revision ${verdict.hf_revision.slice(0, 12)}` : ""}${verdict.multi_compose === false ? " · single compose" : ""}`));
-      $("oc-block").textContent = block.block_height ? `${block.block_height} (${block.block_hash})` : "not reported";
-      $("oc-key").textContent = attestation.registered_key; $("oc-req").textContent = attestation.request_sha256; $("oc-res").textContent = attestation.response_sha256;
-      $("oc-owner").replaceChildren(...(ownership ? [link(`${scan(ownership.network)}/address/${ownership.account_id}`, ownership.account_id), document.createTextNode(` holds ${ownership.public_key.slice(0, 20)}… as ${ownership.permission}, read at ${ownership.network} block ${ownership.block_height}`)] : [document.createTextNode("verified before collection")]));
-      $("replay").hidden = !replayNotice; $("replay").textContent = replayNotice || "";
-    }
-    function renderDossier(dossier, accountId, attestation) {
-      $("dossier-account").textContent = accountId; $("attested-status").textContent = "ATTESTED · Sworn TEE"; $("attested-status").className = "status ok badge";
-      $("attested-model").textContent = attestation.model || "verified model"; $("registry-link").textContent = attestation.registry; $("registry-link").href = `https://explorer.testnet.near.org/accounts/${encodeURIComponent(attestation.registry)}`;
-      $("summary").textContent = dossier.summary || "The model returned no summary.";
-      const worth = dossier.estimated_net_worth || {}; $("worth").textContent = [worth.range,worth.currency].filter(Boolean).join(" ") || "Not enough evidence to estimate";
-      $("worth-basis").textContent = [worth.confidence&&`Confidence: ${worth.confidence}`,worth.basis].filter(Boolean).join(" · "); $("uncertainty").textContent = dossier.uncertainty || "No uncertainty note supplied.";
-      addRows("identities",dossier.linked_identities,row=>`${row.identity||"Unspecified identity"} · ${row.confidence||"confidence not stated"}`);
-      addRows("locations",dossier.likely_location_signals,row=>`${row.signal||"Unspecified signal"} · ${row.confidence||"confidence not stated"}`);
-      addRows("leaks",dossier.three_links_that_leak_most,row=>`${row.link||"Unspecified link"}: ${row.why_it_matters||"No explanation supplied."} Safe action: ${row.safe_action||"No action supplied."}`);
-    }
-    function normalizeProof(result, accountId) {
-      const proof = result?.response || result;
-      if (!proof?.signature || !proof?.publicKey) throw new Error("The wallet returned without a signature. Paste the signed message JSON to continue.");
-      return {accountId:proof.accountId||proof.account_id||accountId,publicKey:proof.publicKey,signature:proof.signature};
-    }
-    $("paste-toggle").addEventListener("click",async()=>{
-      $("paste-box").hidden=!$("paste-box").hidden;
-      if ($("paste-box").hidden) return;
-      try { const payload=await challenge($("account").value.trim()); $("sign-request").value=JSON.stringify(payload,null,2); $("signed-proof").focus(); setStatus("action-status","Signing request ready. Sign it with NEP-413, then paste the returned JSON.","success"); }
-      catch(error) { setStatus("action-status",error.message,"error"); }
-    });
-    $("copy-sign-request").addEventListener("click",async()=>{
-      try { await navigator.clipboard.writeText($("sign-request").value); setStatus("action-status","Signing request copied. Sign it with NEP-413, then paste the returned JSON.","success"); }
-      catch { setStatus("action-status","Clipboard access is unavailable. Select and copy the signing request.","error"); }
-    });
-    $("connect").addEventListener("click",async()=>{
-      const button=$("connect"); button.disabled=true; setStatus("action-status","Opening your NEAR wallet…");
-      try {
-        const accountId=$("account").value.trim(), payload=await challenge(accountId);
-        const userWallet=await wallet();
-        const nonce=Uint8Array.from(atob(payload.nonce),char=>char.charCodeAt(0));
-        const signed=await userWallet.signMessage({message:payload.message,recipient:payload.recipient,nonce,callbackUrl:location.href,state:challengeId});
-        if (signed) await requestDossier(normalizeProof(signed,accountId)); else setStatus("action-status","Finish signing in your wallet. If it returned without a signature, paste the signed message JSON.");
-      } catch(error) { setStatus("action-status",error.message,"error"); } finally { button.disabled=false; }
-    });
-    $("submit-proof").addEventListener("click",async()=>{
-      const button=$("submit-proof"); button.disabled=true;
-      try {
-        const accountId=$("account").value.trim(); if (!challengeId) throw new Error("Create a signing request first, then paste its signed response."); let proof;
-        try { proof=JSON.parse($("signed-proof").value); } catch { throw new Error("Paste valid signed message JSON."); }
-        if (proof.payload&&proof.payload.message!==activePayload?.message) throw new Error("The pasted signature belongs to a different or expired challenge. Connect and sign again.");
-        await requestDossier(normalizeProof(proof,accountId));
-      } catch(error) { setStatus("action-status",error.message,"error"); } finally { button.disabled=false; }
-    });
-    async function runDemo(fresh) {
-      const buttons=[$("demo-run"),$("demo-fresh")]; buttons.forEach(b=>b.disabled=true); $("refusal").hidden=true; setStatus("demo-status",fresh?"Signing, checking the key on chain, calling the model in the TEE, and verifying its receipt. This takes 20 to 90 seconds…":"Reading the latest attested review and re-running the on-chain registry check…");
-      try {
-        const response=await fetch("/api/demo",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({fresh})}), body=await response.json();
-        if (!response.ok) throw new Error(body.error||"The demo review could not complete.");
-        session=null; renderDossier(body.dossier,body.demo_account,body.attestation); renderOnchain(body.attestation,body.ownership,body.replayed?body.notice:"");
-        $("dossier-panel").hidden=false; $("quote-button").disabled=true; setStatus("quote-status","A confidential quote needs your own wallet signature. Review your own account to unlock it.");
-        setStatus("demo-status",`${body.attestation.verdict?.ok?"Attested":"Registry check failed"}: the registry verdict was read at block ${body.attestation.verdict_block?.block_height}.`,body.attestation.verdict?.ok?"success":"error");
-        $("dossier-panel").scrollIntoView({behavior:"smooth",block:"start"});
-      } catch(error) { setStatus("demo-status",error.message,"error"); } finally { buttons.forEach(b=>b.disabled=false); }
-    }
-    $("demo-run").addEventListener("click",()=>runDemo(false));
-    $("demo-fresh").addEventListener("click",()=>runDemo(true));
-    $("unowned-form").addEventListener("submit",async event=>{
-      event.preventDefault(); const button=$("unowned-run"); button.disabled=true; $("refusal").hidden=true;
-      try {
-        const response=await fetch("/api/demo-unowned",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({accountId:$("unowned").value.trim()})}), body=await response.json();
-        if (!response.ok) throw new Error(body.error||"The check could not run.");
-        $("refusal").textContent=`REFUSED: ${body.target}\nsignature valid: ${body.signature_cryptographically_valid}\nsigner key: ${body.signer_public_key}\nreason: ${body.reason}\nchecked: ${body.checked}\nNo data was collected and no model call was made.`; $("refusal").hidden=false;
-        setStatus("demo-status","The signature was cryptographically valid, and Wrench still refused the account.","success");
-      } catch(error) { setStatus("demo-status",error.message,"error"); } finally { button.disabled=false; }
-    });
-    $("quote-form").addEventListener("submit",async event=>{
-      event.preventDefault(); const button=$("quote-button"); button.disabled=true; $("quote-result").hidden=true;
-      try {
-        const value=$("amount").value.trim();
-        if (!/^(?:0|[1-9]\d*)(?:\.\d{1,24})?$/.test(value)||Number(value)<=0) throw new Error("Enter a positive amount with up to 24 decimal places.");
-        const [whole,fraction=""]=value.split("."), amount=(BigInt(whole)*10n**24n+BigInt((fraction+"0".repeat(24)).slice(0,24))).toString();
-        setStatus("quote-status","Sign the empty NEAR Intents ownership request for 1Click…"); await signIntentsOwnership($("account").value.trim());
-        const response=await fetch("/api/quote",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({session,amount})}), body=await response.json();
-        if (!response.ok) throw new Error(body.error||"The 1Click quote failed.");
-        $("quote-result").textContent=JSON.stringify(body,null,2); $("quote-result").hidden=false; setStatus("quote-status","Confidential 1Click quote received. No transfer was submitted.","success");
-      } catch(error) { setStatus("quote-status",error.message,"error"); } finally { button.disabled=false; }
-    });
-    const returnedChallenge=sessionStorage.getItem("wrench-challenge"), returnedAccount=sessionStorage.getItem("wrench-account"), callback=new URLSearchParams(location.hash.slice(1));
-    if (returnedChallenge&&returnedAccount&&callback.get("signature")&&callback.get("publicKey")) {
-      challengeId=returnedChallenge; $("account").value=returnedAccount; history.replaceState(null,"",location.pathname+location.search);
-      sessionStorage.removeItem("wrench-challenge"); sessionStorage.removeItem("wrench-account");
-      requestDossier({accountId:callback.get("accountId")||returnedAccount,publicKey:callback.get("publicKey"),signature:callback.get("signature")}).catch(error=>setStatus("action-status",error.message,"error"));
-    }
-  </script>
+    <div class="points">
+        <p><strong>Private by construction.</strong> Only public account data enters the enclave. Your key stays in your wallet.</p>
+        <p><strong>Checked on chain.</strong> The enclave's signature must match the key the registry holds, in a transaction anyone can open.</p>
+        <p><strong>Refuses what it cannot prove.</strong> An account you do not own, or a receipt with one flipped bit, stops cold.</p>
+    </div>
+    <div class="trace" id="trace">
+      <article class="band b-browser" id="band-browser" aria-labelledby="h-browser">
+        <header><h2 id="h-browser">What left your browser</h2><span class="when" id="when-browser"></span></header>
+        <div id="body-browser"></div>
+      </article>
+      <article class="band b-enclave" id="band-enclave" aria-labelledby="h-enclave">
+        <header><h2 id="h-enclave">What the enclave saw</h2><span class="when" id="when-enclave"></span></header>
+        <div id="body-enclave"></div>
+      </article>
+      <article class="band b-chain" id="band-chain" aria-labelledby="h-chain">
+        <header><h2 id="h-chain">What the chain shows</h2><span class="when" id="when-chain"></span></header>
+        <div id="body-chain"></div>
+      </article>
+    </div>
+  </section>
+
+  <section id="dossier" class="page field-white" aria-labelledby="dossier-title" hidden>
+    <h2 id="dossier-title">Your dossier</h2>
+    <p class="intro" id="dossier-account"></p>
+    <p class="seal" id="dossier-seal"></p>
+    <div class="dossier-grid">
+      <div>
+        <p class="summary" id="d-summary"></p>
+        <div class="worth" id="d-worth"></div>
+        <p id="d-worth-basis"></p>
+        <p id="d-uncertainty"></p>
+      </div>
+      <div>
+        <ul class="leaks" id="d-leaks"></ul>
+        <h3>Linked identities</h3>
+        <ul class="small-list" id="d-identities"></ul>
+        <h3>Location signals</h3>
+        <ul class="small-list" id="d-locations"></ul>
+      </div>
+    </div>
+  </section>
+
+  <section id="break" class="page field-ink" aria-labelledby="break-title">
+    <h2 id="break-title">Try to break it.</h2>
+    <p class="intro">Two attacks, both answered by a real testnet transaction or a refusal before any data moves.</p>
+    <div class="breaks">
+      <div>
+        <h3>Tamper with the receipt</h3>
+        <p>Wrench flips one bit of the response hash and sends it to verify() on the registry. The chain has to say no.</p>
+        <button id="tamper" class="secondary" type="button">Send a tampered receipt</button>
+        <div class="out" id="tamper-out" role="status" aria-live="polite"></div>
+      </div>
+      <div>
+        <h3>Claim an account you do not own</h3>
+        <p>The signature below is cryptographically valid. The account still refuses it: its keys do not include the signer.</p>
+        <form id="unowned-form" class="inline-form">
+          <label for="unowned" hidden>Account to claim</label>
+          <input id="unowned" value="near.testnet" autocomplete="off" spellcheck="false" maxlength="64">
+          <button id="unowned-run" class="secondary" type="submit">Claim it</button>
+        </form>
+        <div class="out" id="unowned-out" role="status" aria-live="polite"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="wallet" class="page" aria-labelledby="wallet-title">
+    <h2 id="wallet-title">Review your own account.</h2>
+    <p class="intro">Connect a wallet, sign one message, and the same three bands run on your account. Testnet is the default; mainnet adds a confidential 1Click quote.</p>
+    <div class="seg" role="radiogroup" aria-label="Network">
+      <input type="radio" name="net" id="net-testnet" value="testnet" checked><label for="net-testnet">Testnet</label>
+      <input type="radio" name="net" id="net-mainnet" value="mainnet"><label for="net-mainnet">Mainnet</label>
+    </div>
+    <div class="actions"><button id="connect" class="primary" type="button">Connect wallet and sign</button></div>
+    <p id="wallet-status" class="status" role="status" aria-live="polite"></p>
+    <details class="manual" id="manual">
+      <summary>Sign somewhere else and paste the result</summary>
+      <div class="manual-row"><input id="account" placeholder="your-account.testnet" autocomplete="off" spellcheck="false" maxlength="64" aria-label="Your NEAR account"><button id="paste-toggle" class="secondary" type="button">Get signing request</button></div>
+      <div id="paste-box" hidden>
+        <label for="sign-request"><strong>Sign this NEP-413 request</strong></label>
+        <textarea id="sign-request" readonly></textarea>
+        <label for="signed-proof"><strong>Paste the signed result</strong></label>
+        <textarea id="signed-proof" placeholder='{"accountId":"...","publicKey":"ed25519:...","signature":"..."}'></textarea>
+        <button id="submit-proof" class="secondary" type="button">Review with this signature</button>
+      </div>
+    </details>
+  </section>
+
+  <section id="dark" class="page field-ink" aria-labelledby="dark-title" hidden>
+    <h2 id="dark-title">Go dark with a confidential quote.</h2>
+    <p class="intro">Your mainnet review is verified. Ask 1Click to quote a move of your public NEAR into a confidential balance. A second wallet signature authenticates you; the quote moves nothing.</p>
+    <form id="quote-form" class="inline-form">
+      <label for="amount" hidden>Amount in NEAR</label>
+      <input id="amount" inputmode="decimal" placeholder="Amount in NEAR" autocomplete="off">
+      <button id="quote-button" class="secondary" type="submit">Request quote</button>
+    </form>
+    <p id="quote-status" class="status" role="status" aria-live="polite"></p>
+    <pre id="quote-result" class="quote-pre" hidden></pre>
+  </section>
+</main>
+<footer>
+  <p class="big" aria-hidden="true">Wrench</p>
+  <div class="links">
+    <a href="https://testnet.nearblocks.io/address/sworn-reg7-1113.testnet" target="_blank" rel="noreferrer">Sworn registry on testnet</a>
+    <a href="https://testnet.nearblocks.io/address/wrenchauditdemo1113.wrenchaudit1113.testnet" target="_blank" rel="noreferrer">Demo account</a>
+    <a href="https://docs.near.ai/cloud/verification/" target="_blank" rel="noreferrer">NEAR AI Cloud verification</a>
+  </div>
+</footer>
+
+<script type="module">
+const $ = id => document.getElementById(id);
+const SCAN = "https://testnet.nearblocks.io";
+const MAIN_SCAN = "https://nearblocks.io";
+
+function visitorToken() {
+  try {
+    let t = localStorage.getItem("wrench-visitor");
+    if (!/^[0-9a-f-]{16,64}$/.test(t || "")) { t = crypto.randomUUID(); localStorage.setItem("wrench-visitor", t); }
+    return t;
+  } catch { return window.__wrenchVisitor ??= crypto.randomUUID(); }
+}
+const headers = extra => ({ "content-type": "application/json", "x-wrench-visitor": visitorToken(), ...extra });
+
+const el = (tag, props = {}, ...kids) => {
+  const node = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) { if (k === "class") node.className = v; else if (k === "text") node.textContent = v; else node.setAttribute(k, v); }
+  for (const kid of kids) if (kid != null) node.append(kid);
+  return node;
+};
+const a = (href, text, props = {}) => el("a", { href, target: "_blank", rel: "noreferrer", text, ...props });
+const short = (value, head = 10, tail = 6) => value && value.length > head + tail + 1 ? `${value.slice(0, head)}…${value.slice(-tail)}` : value;
+const code = (value, head, tail) => el("code", { title: value, text: short(value, head, tail) });
+const kv = rows => { const dl = el("dl", { class: "kv" }); for (const [k, v] of rows) { dl.append(el("dt", { text: k }), el("dd", {}, typeof v === "string" ? document.createTextNode(v) : v)); } return dl; };
+const pending = text => el("p", { class: "pending", text });
+const ageText = iso => { const s = Math.max(0, (Date.now() - Date.parse(iso)) / 1000); return s < 90 ? "moments ago" : s < 5400 ? `${Math.round(s / 60)} minutes ago` : s < 129600 ? `${Math.round(s / 3600)} hours ago` : `${Math.round(s / 86400)} days ago`; };
+const seconds = ms => `${(ms / 1000).toFixed(1)} s`;
+const near = yocto => `${(Number(BigInt(yocto) / 10n ** 18n) / 1e6).toFixed(4)} NEAR`;
+
+// ---- the trace: one state object, three bands ----
+let S = emptyState();
+function emptyState() { return { mode: "demo", network: "testnet", running: false, proof: null, owner: null, seen: null, enclave: null, check: null, tx: null, dossier: null, replay: false, lastAt: null }; }
+
+function renderBrowser() {
+  const body = $("body-browser"); body.replaceChildren();
+  if (!S.proof) { body.append(pending(S.running ? "The challenge is being signed" : "Press the button to sign a challenge")); return; }
+  body.append(el("p", { class: "big", text: "One signed message." }));
+  const msg = S.proof.message.replace(/nonce=([0-9a-f]{8})[0-9a-f]+/, "nonce=$1…");
+  body.append(kv([["Message", msg], ["Key", code(S.proof.public_key, 14, 6)], ["Signed by", S.mode === "wallet" ? "your wallet, the key never left it" : "the demo account's key on the Worker, no wallet needed"]]));
+  if (S.owner) body.append(el("p", {}, a(`${S.owner.network === "mainnet" ? MAIN_SCAN : SCAN}/address/${S.owner.account_id}`, S.owner.account_id), document.createTextNode(` holds that key as ${S.owner.permission} at block ${S.owner.block_height}. Not sent: private key, seed phrase, history.`)));
+  else body.append(pending("Asking NEAR RPC whether this key controls the account"));
+}
+
+function renderEnclave() {
+  const body = $("body-enclave"); body.replaceChildren();
+  if (!S.seen) { body.append(pending(S.running ? (S.owner ? "Reading the account's public data" : "Waiting for the ownership check") : "Waits for the signed challenge")); return; }
+  const m = S.seen, cps = (m.counterparties || []).map(c => `${c.account_id} (${c.transactions})`).join(", ") || "none";
+  body.append(el("p", { class: "big", text: `${m.balance ?? "n/a"}, ${m.transactions} transactions` }));
+  const rows = [["Public data only", `read by Qwen3.8-27B in a TEE on NEAR AI Cloud. Counterparties: ${cps}`]];
+  if (S.enclave) rows.push(["Receipt", el("span", {}, document.createTextNode("enclave key "), code(S.enclave.registered_key, 8, 6), document.createTextNode(" signed request "), code(S.enclave.request_sha256, 8, 4), document.createTextNode(" and response "), code(S.enclave.response_sha256, 8, 4))]);
+  body.append(kv(rows));
+  if (!S.enclave) body.append(pending("Waiting for the model inside the enclave, 10 to 15 s"));
+  $("when-enclave").textContent = S.enclave?.replayed ? `Attested ${ageText(S.enclave.at)}` : "";
+}
+
+function renderChain() {
+  const body = $("body-chain"); body.replaceChildren();
+  if (!S.check) { body.append(pending(S.running ? "Waiting for the enclave's receipt" : "Waits for the enclave's receipt")); return; }
+  const v = S.check.verdict, reg = S.enclave?.registry ?? "sworn-reg7-1113.testnet";
+  if (!S.tx) {
+    body.append(el("p", { class: "big", text: `check() says ${v.ok ? "ok" : "refused"}` }));
+    body.append(kv([["Registry", a(`${SCAN}/address/${reg}`, reg)], ["Read at", `block ${S.check.block?.block_height}: ${v.reason}`]]));
+    body.append(pending("Sending verify() and waiting for finality, about 5 s")); return;
+  }
+  const tx = S.tx;
+  body.append(el("p", { class: "big" }, a(tx.explorer, `verify() ok:${tx.verdict.ok}`, { title: tx.tx_hash })));
+  body.append(kv([
+    ["Transaction", el("span", {}, a(tx.explorer, short(tx.tx_hash, 10, 6)), document.createTextNode(` on ${reg}, block ${tx.block_height ?? "n/a"}, final in ${seconds(tx.elapsed_ms)}, ${(Number(BigInt(tx.tokens_burnt_yocto) / 10n ** 18n) / 1e6).toFixed(4)} NEAR gas`))],
+    ["Public", "request hash, response hash, enclave signature"],
+    ["Dossier text", el("span", {}, el("span", { class: "bar-redact", role: "img", "aria-label": "redacted" }), document.createTextNode("  stays off chain"))],
+  ]));
+  $("when-chain").textContent = "";
+}
+
+function renderAll() { renderBrowser(); renderEnclave(); renderChain(); }
+
+function setStatus(text, kind = "", action) {
+  const node = $("status"); node.className = `status ${kind}`; node.replaceChildren(document.createTextNode(text));
+  if (action) { node.append(document.createTextNode(" "), el("button", { class: "retry", type: "button", text: action.label })); node.querySelector(".retry").addEventListener("click", action.run); }
+}
+
+function applyEvent(ev) {
+  switch (ev.stage) {
+    case "sign": S.proof = ev.proof; break;
+    case "owner": S.owner = ev.ownership; break;
+    case "collect": S.seen = ev.enclave_sees; S.replay = Boolean(ev.replayed); break;
+    case "enclave": S.enclave = ev; break;
+    case "check": S.check = ev; break;
+    case "tx": S.tx = ev.tx; break;
+    case "dossier": S.dossier = ev; break;
+  }
+}
+
+async function readStream(response, onEvent) {
+  const reader = response.body.getReader(), decoder = new TextDecoder();
+  let buffer = "";
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let i;
+    while ((i = buffer.indexOf("\n")) >= 0) { const line = buffer.slice(0, i).trim(); buffer = buffer.slice(i + 1); if (line) onEvent(JSON.parse(line)); }
+  }
+  if (buffer.trim()) onEvent(JSON.parse(buffer));
+}
+
+let timer = null, startedAt = 0;
+const stageLine = () => !S.owner ? "Checking that the key controls the account" : !S.seen ? "Reading public account data" : !S.enclave ? "Waiting for the model inside the enclave" : !S.check ? "Calling check() on the registry" : !S.tx ? "Waiting for the verify() transaction to finalize" : "Preparing your dossier";
+function startTimer() { startedAt = performance.now(); clearInterval(timer); timer = setInterval(() => { if (S.running) setStatus(`${seconds(performance.now() - startedAt)}  ${stageLine()}`); }, 200); }
+
+// Runs a streamed review: POST to url, render every stage as it arrives.
+async function streamReview(url, body, { mode, network, onDone, retry }) {
+  S = { ...emptyState(), mode, network, running: true, lastAt: S.lastAt };
+  for (const id of ["browser", "enclave", "chain"]) $(`when-${id}`).textContent = "";
+  renderAll(); $("dossier").hidden = true; startTimer();
+  $("run").disabled = true; $("connect").disabled = true;
+  try {
+    const response = await fetch(url, { method: "POST", headers: headers(), body: JSON.stringify(body) });
+    if (!response.ok) { const err = await response.json().catch(() => ({})); throw new Error(err.error || `The review could not start (HTTP ${response.status}).`); }
+    let done = null, failure = null;
+    await readStream(response, ev => { if (ev.stage === "error") failure = ev; else if (ev.stage === "done") done = ev; else { applyEvent(ev); renderAll(); } });
+    if (failure) throw new Error(failure.error);
+    if (!done) throw new Error("The review stream ended before the chain answered.");
+    S.running = false; clearInterval(timer);
+    renderAll(); renderDossier();
+    setStatus(`${S.tx?.verdict?.ok ? "Verified on NEAR testnet" : "Receipt refused on chain"} in ${seconds(done.total_ms)}${done.notice ? `. ${done.notice}` : ""}`, "", { label: "Read the dossier", run: () => $("dossier").scrollIntoView() });
+    if (onDone) onDone(done);
+    return done;
+  } catch (error) {
+    S.running = false; clearInterval(timer); renderAll();
+    setStatus(`${error.message}`, "error", { label: "Try again", run: retry });
+    throw error;
+  } finally { $("run").disabled = false; $("connect").disabled = false; }
+}
+
+// ---- dossier ----
+function renderDossier() {
+  if (!S.dossier || !S.tx) return;
+  const d = S.dossier.dossier, tx = S.tx;
+  const clean = v => typeof v === "string" ? v.replaceAll("`", "") : v;
+  $("dossier").hidden = false;
+  $("dossier-account").textContent = S.proof?.account_id ?? "";
+  const seal = $("dossier-seal"); seal.replaceChildren(document.createTextNode(`Released after verify() returned ok:${tx.verdict.ok}  `), a(tx.explorer, short(tx.tx_hash, 8, 6)));
+  $("d-summary").textContent = clean(d.summary) || "The model returned no summary.";
+  const w = d.estimated_net_worth || {};
+  const range = Array.isArray(w.range) ? w.range.join(" to ") : w.range;
+  $("d-worth").textContent = [range, w.currency].filter(Boolean).join(" ") || "Not enough evidence to estimate";
+  $("d-worth-basis").textContent = clean([w.confidence && `Confidence: ${w.confidence}.`, w.basis].filter(Boolean).join(" "));
+  $("d-uncertainty").textContent = clean(d.uncertainty) || "";
+  const leaks = $("d-leaks"); leaks.replaceChildren();
+  for (const row of d.three_links_that_leak_most || []) {
+    leaks.append(el("li", {}, el("h3", { text: clean(row.link) || "Unnamed link" }), el("p", { text: clean(row.why_it_matters) || "" }), el("p", { class: "act", text: row.safe_action ? `Do this: ${clean(row.safe_action)}` : "" })));
+  }
+  const list = (id, rows, f) => { const ul = $(id); ul.replaceChildren(); if (!rows?.length) { ul.append(el("li", { text: "None in the collected evidence." })); return; } for (const r of rows) ul.append(el("li", { text: clean(f(r)) })); };
+  list("d-identities", d.linked_identities, r => `${r.identity || "Unspecified"} (${r.confidence || "confidence not stated"})`);
+  list("d-locations", d.likely_location_signals, r => `${r.signal || "Unspecified"} (${r.confidence || "confidence not stated"})`);
+}
+
+// ---- demo run ----
+async function runDemo() {
+  try { await streamReview("/api/demo", {}, { mode: "demo", network: "testnet", retry: runDemo }); } catch { /* shown in status */ }
+}
+$("run").addEventListener("click", runDemo);
+
+// ---- idle state: the last real run ----
+async function loadLast() {
+  try {
+    const res = await fetch("/api/last", { headers: headers() }), { last } = await res.json();
+    if (!last || S.running || S.proof) return;
+    S.lastAt = last.at; S.proof = last.proof; S.owner = last.ownership; S.seen = last.enclave_sees; S.check = { verdict: last.attestation.verdict, block: last.attestation.verdict_block };
+    S.enclave = { ...last.attestation, replayed: true, at: last.at, registry: last.attestation.registry }; S.tx = last.tx;
+    if (!S.proof || !S.seen) { S = emptyState(); renderAll(); return; }
+    renderAll();
+    for (const id of ["browser", "enclave", "chain"]) $(`when-${id}`).textContent = `Last run ${ageText(last.at)}`;
+    setStatus("These bands hold the last real run. Press the button to run it live, about 25 seconds.");
+  } catch { renderAll(); }
+}
+renderAll(); loadLast();
+
+// ---- break it ----
+function refusedBlock(title, lines) { return el("div", { class: "refused" }, el("strong", { text: title }), ...lines.map(l => el("div", {}, l))); }
+$("tamper").addEventListener("click", async () => {
+  const button = $("tamper"), out = $("tamper-out"); button.disabled = true; out.replaceChildren(pending("Sending the tampered receipt to verify() and waiting for finality, about 5 s"));
+  try {
+    const res = await fetch("/api/tamper", { method: "POST", headers: headers(), body: "{}" }), body = await res.json();
+    if (!res.ok) throw new Error(body.error || "The tampered receipt could not be sent.");
+    const t = body.tx;
+    out.replaceChildren(refusedBlock(t.verdict.ok ? "Accepted" : "Refused on chain", [
+      document.createTextNode(`verify() answered ok:${t.verdict.ok}. Reason: ${t.verdict.reason}.`),
+      document.createTextNode(`First hex digit of the response hash changed from ${body.tampered.original[0]} to ${body.tampered.submitted[0]}.`),
+      a(t.explorer, `Transaction ${short(t.tx_hash, 8, 6)} at block ${t.block_height}`),
+    ]));
+  } catch (error) { out.replaceChildren(el("p", { text: error.message })); } finally { button.disabled = false; }
+});
+$("unowned-form").addEventListener("submit", async event => {
+  event.preventDefault(); const button = $("unowned-run"), out = $("unowned-out"); button.disabled = true; out.replaceChildren(pending("Checking the signer key against the account's keys on NEAR RPC"));
+  try {
+    const res = await fetch("/api/demo-unowned", { method: "POST", headers: headers(), body: JSON.stringify({ accountId: $("unowned").value.trim() }) }), body = await res.json();
+    if (!res.ok) throw new Error(body.error || "The check could not run.");
+    out.replaceChildren(refusedBlock(`Refused: ${body.target}`, [
+      document.createTextNode(`Signature valid: ${body.signature_cryptographically_valid}. Signer key ${short(body.signer_public_key, 14, 6)}.`),
+      document.createTextNode(body.reason),
+      document.createTextNode("No data was collected and no model was called."),
+    ]));
+  } catch (error) { out.replaceChildren(el("p", { text: error.message })); } finally { button.disabled = false; }
+});
+
+// ---- wallet path ----
+let connector = null, connectorNetwork = null, session = null;
+const walletNet = () => document.querySelector('input[name="net"]:checked').value;
+const setWalletStatus = (text, kind = "") => { const n = $("wallet-status"); n.className = `status ${kind}`; n.textContent = text; };
+const b64bytes = value => Uint8Array.from(atob(value), c => c.charCodeAt(0));
+
+async function getWallet(network) {
+  if (!connector || connectorNetwork !== network) {
+    const { NearConnector } = await import("https://esm.sh/@hot-labs/near-connect@0.12.0");
+    connector = new NearConnector({ network, features: { signMessage: true } }); connectorNetwork = network;
+  }
+  try { const w = await connector.wallet(); if ((await w.getAccounts({ network })).length) return w; } catch { /* not signed in yet */ }
+  return connector.connect();
+}
+async function challenge(accountId, network) {
+  if (!/^[a-z0-9._-]{2,64}$/.test(accountId)) throw new Error("Enter a valid NEAR account ID first.");
+  const res = await fetch(`/api/challenge?accountId=${encodeURIComponent(accountId)}&network=${network}`, { headers: headers() }), body = await res.json();
+  if (!res.ok) throw new Error(body.error || "Could not create a signing challenge.");
+  return body;
+}
+function normalizeProof(result, accountId) {
+  const p = result?.response || result;
+  if (!p?.signature || !p?.publicKey) throw new Error("The wallet returned no signature. Use the paste option below.");
+  return { accountId: p.accountId || p.account_id || accountId, publicKey: p.publicKey, signature: p.signature };
+}
+async function reviewWithProof(challengeId, proof, network) {
+  const done = await streamReview("/api/dossier", { challengeId, proof }, { mode: "wallet", network, retry: () => $("connect").click() });
+  session = done.session; $("dark").hidden = done.network !== "mainnet" || !session;
+  $("top").scrollIntoView();
+  return done;
+}
+$("connect").addEventListener("click", async () => {
+  const network = walletNet(); $("connect").disabled = true; setWalletStatus("Opening the wallet picker");
+  try {
+    const wallet = await getWallet(network);
+    const accounts = await wallet.getAccounts({ network }), accountId = accounts[0]?.accountId;
+    if (!accountId) throw new Error("The wallet did not share an account.");
+    setWalletStatus(`Sign the request for ${accountId} in your wallet`);
+    const c = await challenge(accountId, network);
+    const signed = await wallet.signMessage({ message: c.payload.message, recipient: c.payload.recipient, nonce: b64bytes(c.payload.nonce), network });
+    setWalletStatus("Signed. The review is running at the top of the page.", "");
+    await reviewWithProof(c.challengeId, normalizeProof(signed, accountId), network);
+  } catch (error) { setWalletStatus(error.message, "error"); } finally { $("connect").disabled = false; }
+});
+let manual = null;
+$("paste-toggle").addEventListener("click", async () => {
+  const network = walletNet();
+  try { manual = await challenge($("account").value.trim(), network); $("sign-request").value = JSON.stringify(manual.payload, null, 2); $("paste-box").hidden = false; $("signed-proof").focus(); setWalletStatus("Signing request ready. Sign it with NEP-413, then paste the result."); }
+  catch (error) { setWalletStatus(error.message, "error"); }
+});
+$("submit-proof").addEventListener("click", async () => {
+  try {
+    if (!manual) throw new Error("Get a signing request first.");
+    let proof; try { proof = JSON.parse($("signed-proof").value); } catch { throw new Error("Paste valid signed message JSON."); }
+    if (proof.payload && proof.payload.message !== manual.payload.message) throw new Error("The pasted signature belongs to a different or expired request.");
+    await reviewWithProof(manual.challengeId, normalizeProof(proof, $("account").value.trim()), manual.network);
+  } catch (error) { setWalletStatus(error.message, "error"); }
+});
+
+// ---- go dark: confidential 1Click quote (mainnet) ----
+async function signIntentsOwnership(accountId) {
+  const { createIntentSignerNEP413, IntentsSDK, VersionedNonceBuilder } = await import("https://esm.sh/@defuse-protocol/intents-sdk@0.96.0?bundle");
+  const intents = new IntentsSDK({ referral: "wrench" }), wallet = await getWallet("mainnet");
+  const signer = createIntentSignerNEP413({ accountId, signMessage: async payload => {
+    const message = payload.payload ?? payload;
+    const nonce = message.nonce instanceof Uint8Array ? message.nonce : Array.isArray(message.nonce) ? Uint8Array.from(message.nonce) : b64bytes(message.nonce);
+    const signed = await wallet.signMessage({ message: message.message, nonce, recipient: message.recipient, network: "mainnet" });
+    const raw = signed.signature instanceof Uint8Array ? btoa(String.fromCharCode(...signed.signature)) : signed.signature;
+    return { publicKey: signed.publicKey.toString(), signature: raw };
+  } });
+  const { signed } = await intents.intentBuilder().setDeadline(new Date(Date.now() + 5 * 60_000)).setNonceRandomBytes(VersionedNonceBuilder.createTimestampedNonceBytes(new Date())).buildAndSign(signer);
+  const res = await fetch("/api/quote-session", { method: "POST", headers: headers(), body: JSON.stringify({ session, signedData: signed }) }), body = await res.json();
+  if (!res.ok) throw new Error(body.error || "1Click authentication failed. Your NEAR key may need registration on intents.near.");
+}
+$("quote-form").addEventListener("submit", async event => {
+  event.preventDefault(); const button = $("quote-button"); button.disabled = true; $("quote-result").hidden = true;
+  const status = text => { $("quote-status").textContent = text; };
+  try {
+    const value = $("amount").value.trim();
+    if (!/^(?:0|[1-9]\d*)(?:\.\d{1,24})?$/.test(value) || Number(value) <= 0) throw new Error("Enter a positive amount with up to 24 decimal places.");
+    const [whole, fraction = ""] = value.split("."), amount = (BigInt(whole) * 10n ** 24n + BigInt((fraction + "0".repeat(24)).slice(0, 24))).toString();
+    status("Sign the empty NEAR Intents ownership request for 1Click"); await signIntentsOwnership(S.proof.account_id);
+    const res = await fetch("/api/quote", { method: "POST", headers: headers(), body: JSON.stringify({ session, amount }) }), body = await res.json();
+    if (!res.ok) throw new Error(body.error || "The 1Click quote failed.");
+    $("quote-result").textContent = JSON.stringify(body, null, 2); $("quote-result").hidden = false; status("Confidential 1Click quote received. Nothing was transferred.");
+  } catch (error) { status(error.message); } finally { button.disabled = false; }
+});
+</script>
 </body>
 </html>
