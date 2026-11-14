@@ -12,7 +12,7 @@
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&display=swap" rel="stylesheet">
 <style>
 :root {
-  --ground: #eceef0; --white: #ffffff; --ink: #0f1318; --grey: #d9dde1; --accent: #ff5a1f; --ok: #0b4a2c; --ok-line: #2fd27a;
+  --ground: #eceef0; --white: #ffffff; --ink: #0f1318; --grey: #d9dde1; --accent: #ff5a1f; --ok: #0b4a2c; --high: #c8102e; --ok-line: #2fd27a;
   --gutter: clamp(16px, 4vw, 56px);
   --font: "DM Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   color-scheme: light;
@@ -32,7 +32,7 @@ button, input { font: inherit; color: inherit; }
 .bar nav { display: flex; gap: 28px; flex-wrap: wrap; font-weight: 500; }
 .bar nav a { text-decoration: none; }
 .bar nav a:hover { text-decoration: underline; }
-.net { font-weight: 500; }
+.net { font-weight: 500; font-variant-numeric: tabular-nums; border: 1px solid var(--ink); padding: 5px 12px; font-size: 14px; }
 @media (max-width: 760px) { .bar { flex-wrap: wrap; row-gap: 6px; } .bar nav { order: 3; width: 100%; gap: 22px; } .net { margin-left: auto; } }
 
 .hero { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); grid-template-areas: "pitch trace" "points trace"; grid-template-rows: auto 1fr; column-gap: clamp(24px, 4vw, 64px); padding: 12px var(--gutter) 96px; align-items: start; }
@@ -40,7 +40,7 @@ button, input { font: inherit; color: inherit; }
 .points { grid-area: points; }
 .lead-m { display: none; font-size: 17px; }
 .found { margin: 0 0 8px; }
-.found-head { font-weight: 700; font-size: 20px; letter-spacing: -0.02em; margin: 0 0 8px !important; }
+.found-head { font-weight: 700; font-size: 14px; letter-spacing: 0.1em; text-transform: uppercase; margin: 0 0 12px !important; }
 .found ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .found li { display: flex; gap: 12px; align-items: baseline; }
 .found-text { min-width: 0; overflow-wrap: anywhere; }
@@ -53,7 +53,7 @@ button, input { font: inherit; color: inherit; }
 @keyframes blink { 50% { opacity: 0.25; } }
 @media (prefers-reduced-motion: reduce) { .ladder li.active i { animation: none; } }
 .trace { grid-area: trace; }
-h1 { margin: 0; font-size: clamp(44px, 5.2vw, 80px); line-height: 0.98; letter-spacing: -0.045em; font-weight: 700; }
+h1 { margin: 0; font-size: clamp(44px, 5.2vw, 80px); line-height: 0.98; letter-spacing: -0.03em; font-weight: 700; }
 .lead { margin: 28px 0 0; font-size: 20px; line-height: 1.45; max-width: 30em; }
 .actions { margin-top: 32px; display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; }
 .primary { background: var(--accent); color: var(--ink); border: 0; border-radius: 0; padding: 0 28px; min-height: 56px; font-weight: 700; font-size: 18px; cursor: pointer; }
@@ -85,6 +85,7 @@ h1 { margin: 0; font-size: clamp(44px, 5.2vw, 80px); line-height: 0.98; letter-s
 .cells > div { background: var(--cell-bg, var(--white)); padding: 8px 12px; min-width: 0; }
 .b-enclave .cells > div { --cell-bg: var(--ink); }
 .b-chain.v-ok .cells > div { --cell-bg: var(--ok); }
+.b-chain.v-ok .cells .num { font-size: clamp(22px, 2vw, 28px); white-space: nowrap; overflow-wrap: normal; }
 .b-chain.v-no .cells > div { --cell-bg: var(--accent); }
 .cells dt, .cells .lab { display: block; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 700; opacity: 0.72; margin: 0 0 4px; }
 .cells .num { display: block; font-size: clamp(18px, 1.7vw, 24px); line-height: 1.05; font-weight: 700; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
@@ -92,11 +93,14 @@ h1 { margin: 0; font-size: clamp(44px, 5.2vw, 80px); line-height: 0.98; letter-s
 .chip { display: inline-flex; align-items: baseline; gap: 6px; padding: 4px 9px; background: rgba(127,127,127,0.22); font: 12.5px/1.4 ui-monospace, Menlo, monospace; max-width: 100%; }
 .chip b { font: 700 10.5px/1.4 var(--font); letter-spacing: 0.1em; text-transform: uppercase; opacity: 0.75; }
 .msgline { margin: 0; font: 12.5px/1.5 ui-monospace, Menlo, monospace; opacity: 0.78; overflow-wrap: anywhere; }
-.found-tiers { font-weight: 500; font-size: 15px; margin-left: 6px; }
+.found-tiers { text-transform: none; display: block; font-weight: 700; font-size: clamp(26px, 2.4vw, 34px); line-height: 1.05; letter-spacing: -0.03em; margin-top: 2px; }
+.found-do { display: block; margin-top: 2px; font-size: 14px; }
+.found-do em { font-style: normal; font-weight: 700; }
 .found li { align-items: flex-start; }
 .found-text b { display: block; font-weight: 700; line-height: 1.3; }
 .found-text i { display: block; font-style: normal; font: 12.5px/1.5 ui-monospace, Menlo, monospace; color: #5b636b; }
-.ladder li.past i { background: transparent; box-shadow: inset 0 0 0 2px var(--ink); }
+.ladder li.past i { background: var(--ok); }
+.ladder li.past i::after { content: ""; display: block; width: 6px; height: 3px; margin: 3px 0 0 3px; border-left: 2px solid var(--white); border-bottom: 2px solid var(--white); transform: rotate(-45deg); }
 .net::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--ok-line); margin-right: 8px; animation: pulse 1.6s ease-in-out infinite; }
 @keyframes pulse { 50% { opacity: 0.25; } }
 @media (prefers-reduced-motion: reduce) { .net::before { animation: none; } }
@@ -148,7 +152,7 @@ section.page > .intro { font-size: 20px; max-width: 34em; margin: 0 0 40px; }
 .leaks td:last-child, .leaks th:last-child { padding-right: 0; }
 .leaks .what { font-weight: 700; display: block; margin-bottom: 4px; overflow-wrap: anywhere; }
 .sev { display: inline-block; padding: 4px 10px; font-weight: 700; background: var(--grey); }
-.sev.high { background: var(--accent); }
+.sev.high { background: var(--high); color: var(--white); }
 .sev.medium { background: var(--ink); color: var(--white); }
 .worth { font-size: clamp(28px, 3.4vw, 52px); font-weight: 700; letter-spacing: -0.04em; line-height: 1; margin: 20px 0 8px; }
 .summary { font-size: 20px; line-height: 1.5; margin: 0 0 24px; }
@@ -411,7 +415,7 @@ function renderChain() {
   const gas = (Number(BigInt(tx.tokens_burnt_yocto) / 10n ** 18n) / 1e6).toFixed(4);
   body.append(cells([["Result", ok ? "Match" : "No match"], ["Block", tx.block_height ?? "n/a"], ["Final in", seconds(tx.elapsed_ms)], ["Gas NEAR", gas]]));
   body.append(el("p", {}, a(tx.explorer, `Open verify() tx ${short(tx.tx_hash, 8, 6)}`, { class: "txbtn", title: tx.tx_hash })));
-  body.append(el("p", { class: "msgline" }, document.createTextNode(`${reg} holds the enclave's key and checked two hashes and a signature. `), el("span", { class: "bar-redact", role: "img", "aria-label": "redacted" }), document.createTextNode("  dossier text stays off chain")));
+  body.append(el("p", { class: "msgline", text: `${reg} holds the enclave's key and checked two hashes and a signature. Dossier text stays off chain.` }));
   $("when-chain").textContent = "";
 }
 
@@ -421,12 +425,12 @@ function renderLadder() {
   for (const li of $("ladder").children) { const k = li.dataset.step; li.className = done[k] ? (S.running || !S.replay ? "done" : "past") : S.running && k === first ? "active" : ""; }
 }
 
-const CONSEQUENCE = [[/full ?access key/i, "Another key can move all your funds"], [/function ?call key/i, "A key can call contracts as you"], [/transfer|counterpart/i, "Your payment trail points to named accounts"]];
-function findingParts(raw) {
-  const text = String(raw).replaceAll("`", ""), m = text.match(/ed25519:[1-9A-HJ-NP-Za-km-z]{30,}/), key = m ? keyShort(m[0]) : "";
-  const head = text.replace(/:?\s*ed25519:[1-9A-HJ-NP-Za-km-z]{30,}/g, "").trim();
-  const hit = CONSEQUENCE.find(([re]) => re.test(head));
-  return { title: hit ? hit[1] : head, detail: [hit ? head : "", key].filter(Boolean).join(" · ") };
+const CONSEQUENCE = [[/full ?access key/i, "Another key can move all your funds"], [/function ?call key/i, "A key can call contracts as you"]];
+const firstSentence = (t, max = 120) => { const x = String(t || "").replaceAll("`", "").replace(/\s+/g, " ").trim(), m = x.match(/^.*?[.!?](?=\s|$)/), sent = m ? m[0] : x; return sent.length > max ? `${sent.slice(0, max - 1).trimEnd()}…` : sent; };
+function findingParts(f) {
+  const text = String(f.link).replaceAll("`", ""), why = firstSentence(f.why), hit = CONSEQUENCE.find(([re]) => re.test(text));
+  const ident = keyShort(text.replace(/^(extra\s+)?(fullaccess|function\s?call)\s+key:?\s*/i, ""));
+  return { title: why || (hit ? hit[1] : text), detail: ident, action: firstSentence(f.action, 140) };
 }
 function renderFound(findings, head) {
   const box = $("found"), list = $("found-list");
@@ -436,10 +440,10 @@ function renderFound(findings, head) {
   if (!rows.length) return;
   const tier = t => rows.filter(f => String(f.severity).toLowerCase() === t).length;
   const counts = ["high", "medium", "low"].map(t => [t, tier(t)]).filter(([, n]) => n).map(([t, n]) => `${n} ${t}`).join(", ");
-  $("found-head").replaceChildren(document.createTextNode(head), el("span", { class: "found-tiers", text: counts ? `: ${counts}` : "" }));
+  $("found-head").replaceChildren(document.createTextNode(head), el("span", { class: "found-tiers", text: counts }));
   for (const f of rows) {
-    const sev = ["high", "medium", "low"].includes(String(f.severity).toLowerCase()) ? String(f.severity).toLowerCase() : "", p = findingParts(f.link);
-    list.append(el("li", {}, sev ? el("span", { class: `sev ${sev}`, text: sev }) : null, el("span", { class: "found-text" }, el("b", { text: p.title }), p.detail ? el("i", { text: p.detail }) : null)));
+    const sev = ["high", "medium", "low"].includes(String(f.severity).toLowerCase()) ? String(f.severity).toLowerCase() : "", p = findingParts(f);
+    list.append(el("li", {}, sev ? el("span", { class: `sev ${sev}`, text: sev }) : null, el("span", { class: "found-text" }, el("b", { text: p.title }), p.detail ? el("i", { text: p.detail }) : null, p.action ? el("span", { class: "found-do" }, el("em", { text: "Do this: " }), document.createTextNode(p.action)) : null)));
   }
 }
 
@@ -494,7 +498,7 @@ async function streamReview(url, body, { mode, network, onDone, retry }) {
     if (!done) throw new Error("The review stream ended before the chain answered.");
     S.running = false; clearInterval(timer);
     renderAll(); renderDossier();
-    renderFound(S.dossier?.dossier?.three_links_that_leak_most, "Found in this run");
+    renderFound((S.dossier?.dossier?.three_links_that_leak_most || []).map(r => ({ link: r.link, severity: r.severity, why: r.why_it_matters, action: r.safe_action })), "Found in this run");
     setStatus(`${S.tx?.verdict?.ok ? "Verified on NEAR testnet" : "Receipt refused on chain"} in ${seconds(done.total_ms)}${done.notice ? `. ${done.notice}` : ""}`, "", { label: "Read the dossier", run: () => $("dossier").scrollIntoView() });
     if (S.tx) { $("status").append(document.createTextNode("  "), a(S.tx.explorer, `verify() tx ${short(S.tx.tx_hash, 8, 6)}`)); }
     if (onDone) onDone(done);
@@ -558,7 +562,7 @@ async function loadLast() {
     if (!S.proof || !S.seen) { S = emptyState(); renderAll(); return; }
     renderAll(); renderFound(last.findings, "Found in the last run");
     $("when-browser").textContent = `Last run ${ageText(last.at)}`;
-    setStatus(`Last verified ${ageText(last.at)} at block ${last.tx.block_height}. Press the button to run it live, about 25 seconds.`);
+    setStatus(`Showing the last verified run from ${ageText(last.at)}, final at block ${last.tx.block_height}. Press the button to run it live, about 25 seconds.`);
     $("status").append(document.createTextNode("  "), a(last.tx.explorer, `verify() tx ${short(last.tx.tx_hash, 8, 6)}`));
   } catch { renderAll(); }
 }

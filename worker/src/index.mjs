@@ -190,7 +190,7 @@ async function route(request, env) {
   if (method === "GET" && path === "/api/last") {
     const last = await state.getLast();
     if (!last?.tx) return json(200, { last: null });
-    return json(200, { last: { at: last.at, demo_account: last.demo_account, ownership: last.ownership, enclave_sees: last.enclave_sees ?? null, proof: last.proof ?? null, findings: (last.dossier?.three_links_that_leak_most ?? []).map(f => ({ link: f.link, severity: f.severity ?? null })), attestation: { model: last.attestation.model, registry: last.attestation.registry, registered_key: last.attestation.registered_key, request_sha256: last.attestation.request_sha256, response_sha256: last.attestation.response_sha256, signature: last.attestation.signature, verdict: last.attestation.verdict, verdict_block: last.attestation.verdict_block }, tx: last.tx } });
+    return json(200, { last: { at: last.at, demo_account: last.demo_account, ownership: last.ownership, enclave_sees: last.enclave_sees ?? null, proof: last.proof ?? null, findings: (last.dossier?.three_links_that_leak_most ?? []).map(f => ({ link: f.link, severity: f.severity ?? null, why: f.why_it_matters ?? null, action: f.safe_action ?? null })), attestation: { model: last.attestation.model, registry: last.attestation.registry, registered_key: last.attestation.registered_key, request_sha256: last.attestation.request_sha256, response_sha256: last.attestation.response_sha256, signature: last.attestation.signature, verdict: last.attestation.verdict, verdict_block: last.attestation.verdict_block }, tx: last.tx } });
   }
 
   if (method === "POST" && path === "/api/demo") {
