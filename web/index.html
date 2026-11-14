@@ -385,7 +385,7 @@ async function streamReview(url, body, { mode, network, onDone, retry }) {
   $("run").disabled = true; $("connect").disabled = true;
   try {
     const response = await fetch(url, { method: "POST", headers: headers(), body: JSON.stringify(body) });
-    if (!response.ok) { const err = await response.json().catch(() => ({})); throw new Error(err.error || `The review could not start (HTTP ${response.status}).`); }
+    if (!response.ok) { const err = await response.json().catch(() => ({})); const failed = new Error(err.error || `The review could not start (HTTP ${response.status}).`); failed.limited = response.status === 429; throw failed; }
     let done = null, failure = null;
     await readStream(response, ev => { if (ev.stage === "error") failure = ev; else if (ev.stage === "done") done = ev; else { applyEvent(ev); renderAll(); } });
     if (failure) throw new Error(failure.error);
@@ -397,7 +397,7 @@ async function streamReview(url, body, { mode, network, onDone, retry }) {
     return done;
   } catch (error) {
     S.running = false; clearInterval(timer); renderAll();
-    setStatus(`${error.message}`, "error", { label: "Try again", run: retry });
+    setStatus(`${error.message}`, "error", error.limited ? (mode === "demo" ? null : { label: "Run the no-wallet demo", run: () => { $("top").scrollIntoView(); runDemo(); } }) : { label: "Try again", run: retry });
     throw error;
   } finally { $("run").disabled = false; $("connect").disabled = false; }
 }
