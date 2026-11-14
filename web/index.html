@@ -426,10 +426,10 @@ function renderDossier() {
 }
 
 // ---- demo run ----
-async function runDemo() {
-  try { await streamReview("/api/demo", {}, { mode: "demo", network: "testnet", retry: runDemo }); } catch { /* shown in status */ }
+async function runDemo(fresh = true) {
+  try { await streamReview("/api/demo", fresh ? {} : { fresh: false }, { mode: "demo", network: "testnet", retry: () => runDemo(!S.enclave) }); } catch { /* shown in status */ }
 }
-$("run").addEventListener("click", runDemo);
+$("run").addEventListener("click", () => runDemo());
 
 // ---- idle state: the last real run ----
 async function loadLast() {

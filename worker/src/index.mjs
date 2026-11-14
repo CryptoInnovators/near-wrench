@@ -109,9 +109,11 @@ async function runPipeline({ env, state, emit = noop, proof, network, linked = [
     dossier = result.dossier; attestation = result.attestation; at = new Date().toISOString();
     evidence = { network, collected_at: bundle.collected_at, balance_yocto: bundle.balances.near, recent_transactions: bundle.recent_transactions.length, top_counterparties: bundle.top_counterparties, sources: bundle.sources };
   }
+  const record = { at, network, demo_account: proof.accountId, ownership: owner, evidence, enclave_sees: seen, proof: proofView, dossier, attestation };
+  if (saveLast && !replay) await state.saveLast(record);
   const tx = await verifyOnChain({ attestation, ...demoKey(env) });
   await emit({ stage: "tx", tx, at_ms: Date.now() - t0 });
-  if (saveLast && !replay) await state.saveLast({ at, network, demo_account: proof.accountId, ownership: owner, evidence, enclave_sees: seen, proof: proofView, dossier, attestation, tx });
+  if (saveLast && !replay) await state.saveLast({ ...record, tx });
   await emit({ stage: "dossier", dossier, evidence, attestation: { ...attestation, signature: undefined }, at, at_ms: Date.now() - t0 });
   return { owner, balance, total_ms: Date.now() - t0, fresh: !replay };
 }
@@ -136,12 +138,14 @@ async function gate(env, request, kind) {
   return env.STATE.getByName("wrench").limit(kind, ipHash, visitor, caps);
 }
 
+const friendly = message => /HTTP 429|Rate limit/i.test(message) ? "NEAR testnet RPC is rate limiting right now. Retry in a few seconds." : /HTTP 5\d\d|timed out|timeout|fetch failed|aborted/i.test(message) ? "A NEAR testnet RPC node did not answer in time. Retry in a few seconds." : message.length > 400 ? `${message.slice(0, 400)}...` : message;
+
 function ndjson(run) {
   const { readable, writable } = new TransformStream();
   const writer = writable.getWriter(), encoder = new TextEncoder();
   const emit = value => writer.write(encoder.encode(`${JSON.stringify(value)}\n`));
   (async () => {
-    try { await run(emit); } catch (error) { await emit({ stage: "error", status: error.status ?? 502, error: error.message }).catch(() => {}); }
+    try { await run(emit); } catch (error) { await emit({ stage: "error", status: error.status ?? 502, error: friendly(error.message) }).catch(() => {}); }
     finally { await writer.close().catch(() => {}); }
   })();
   return new Response(readable, { headers: { "content-type": "application/x-ndjson; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff" } });
@@ -171,7 +175,7 @@ async function route(request, env) {
   if (method === "GET" && path === "/api/last") {
     const last = await state.getLast();
     if (!last?.tx) return json(200, { last: null });
-    return json(200, { last: { at: last.at, demo_account: last.demo_account, ownership: last.ownership, enclave_sees: last.enclave_sees ?? null, proof: last.proof ?? null, attestation: { model: last.attestation.model, registry: last.attestation.registry, registered_key: last.attestation.registered_key, request_sha256: last.attestation.request_sha256, response_sha256: last.attestation.response_sha256, verdict: last.attestation.verdict, verdict_block: last.attestation.verdict_block }, tx: last.tx } });
+    return json(200, { last: { at: last.at, demo_account: last.demo_account, ownership: last.ownership, enclave_sees: last.enclave_sees ?? null, proof: last.proof ?? null, attestation: { model: last.attestation.model, registry: last.attestation.registry, registered_key: last.attestation.registered_key, request_sha256: last.attestation.request_sha256, response_sha256: last.attestation.response_sha256, signature: last.attestation.signature, verdict: last.attestation.verdict, verdict_block: last.attestation.verdict_block }, tx: last.tx } });
   }
 
   if (method === "POST" && path === "/api/demo") {

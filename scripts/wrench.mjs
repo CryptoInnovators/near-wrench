@@ -58,7 +58,7 @@ export function proofBindsAccount(proof) {
   return Buffer.from(proof.payload.nonce, "base64").toString("hex") === match[2];
 }
 
-const RPC_URLS = { testnet: ["https://near-testnet.drpc.org", "https://test.rpc.fastnear.com"], mainnet: ["https://rpc.mainnet.fastnear.com"] };
+const RPC_URLS = { testnet: ["https://near-testnet.drpc.org", "https://archival-rpc.testnet.near.org", "https://test.rpc.fastnear.com"], mainnet: ["https://rpc.mainnet.fastnear.com"] };
 
 export async function rpc(network, method, params) {
   const urls = RPC_URLS[network];
@@ -312,10 +312,15 @@ export function signedTxBase64(txBytes, privateKey) {
 const lastNonce = new Map();
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
+const transient = error => /HTTP 429|HTTP 5\d\d|Rate limit|timed out|timeout|fetch failed|aborted|ECONN/i.test(error.message);
+
 export async function sendFunctionCall({ network = "testnet", signerId, publicKey, privateKey, receiverId, methodName, args, gas = 30_000_000_000_000n, deposit = 0n }) {
   let failure;
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    const key = await rpc(network, "query", { request_type: "view_access_key", finality: "final", account_id: signerId, public_key: publicKey });
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    if (failure && transient(failure)) await sleep(700 * attempt);
+    let key;
+    try { key = await rpc(network, "query", { request_type: "view_access_key", finality: "final", account_id: signerId, public_key: publicKey }); }
+    catch (error) { failure = error; if (transient(error)) continue; throw error; }
     const nonce = Math.max(Number(key.nonce), lastNonce.get(signerId) ?? 0) + 1;
     lastNonce.set(signerId, nonce);
     const tx = encodeFunctionCallTx({ signerId, publicKey, nonce, receiverId, blockHash: key.block_hash, methodName, args: JSON.stringify(args), gas, deposit });
@@ -323,9 +328,8 @@ export async function sendFunctionCall({ network = "testnet", signerId, publicKe
       return await rpc(network, "send_tx", { signed_tx_base64: signedTxBase64(tx, privateKey), wait_until: "FINAL" });
     } catch (error) {
       failure = error;
-      if (!/InvalidNonce|nonce/i.test(error.message)) throw error;
-      lastNonce.delete(signerId);
-      await sleep(150 + Math.floor(Math.random() * 350));
+      if (/InvalidNonce|nonce/i.test(error.message)) { lastNonce.delete(signerId); await sleep(150 + Math.floor(Math.random() * 350)); continue; }
+      if (!transient(error)) throw error;
     }
   }
   throw failure;
