@@ -1,32 +1,38 @@
-# Wrench: audit your wallet exposure privately, on a TEE
+# Wrench: audit your wallet privately
 
-Wrench lets a NEAR account owner prove ownership with a NEP-413 signature, has a model on NEAR AI Cloud analyse that account's public exposure inside a TEE, and verifies the TEE-signed receipt against the on-chain Sworn registry before showing the dossier, then quotes a confidential 1Click transfer to act on it.
+[![judge](https://github.com/CryptoInnovators/near-wrench/actions/workflows/judge.yml/badge.svg)](https://github.com/CryptoInnovators/near-wrench/actions/workflows/judge.yml)
 
-## 60-second judge path
+A model reads your NEAR account's exposure inside a TEE. NEAR's Sworn registry verifies the model's signed receipt in a real testnet transaction before you see a word. Lead track: Privacy and Private AI. Also fits Security and DeFi.
 
-Live: https://near-wrench.earn-shield-alerts.workers.dev (NEAR testnet, no wallet needed)
+Live (NEAR testnet, no wallet needed): https://near-wrench.earn-shield-alerts.workers.dev
 
-1. Press `Run the demo review`. Wrench signs a NEP-413 challenge for the testnet demo account `wrenchauditdemo1113.wrenchaudit1113.testnet`, checks that key against the account's FullAccess keys over RPC, has `Qwen/Qwen3.8-27B` on NEAR AI Cloud read the account inside a TEE, and verifies the TEE-signed receipt with the `check()` view of `sworn-reg7-1113.testnet`. The `On-chain result` block shows `ok:true`, the block it was read at, the registered key, and the request and response SHA-256.
-2. Type `near.testnet` under `Try an account you do not own`. The signature is cryptographically valid and Wrench refuses the account before any data is collected or any model is called.
-3. Press `Run a fresh model call` for a new TEE-signed completion and a new registry check.
-4. With your own wallet, `Connect and sign` runs the same review on your account, then quotes a confidential 1Click transfer. Run it locally with `bash scripts/serve.sh`.
+## Do this, see that (60 seconds)
 
-Hosted limits: per-visitor and daily caps on model calls keep the public URL within budget; over the cap the page shows the latest attested review and re-runs the on-chain check live.
+1. Open the live URL and press `Review a testnet account`. In about 25 seconds the page fills three bands: `What left your browser` (one NEP-413 signature), `What the enclave saw` (public balance, transactions, counterparties, the enclave's signed request and response hashes) and `What the chain shows` (a `verify()` transaction on `sworn-reg7-1113.testnet` with a link that opens on testnet.nearblocks.io, `ok:true`). The dossier unseals below after that transaction returns.
+2. Press `Send a tampered receipt`. Wrench flips one bit of the response hash and sends it to `verify()`. See `Refused on chain`, `ok:false`, and the transaction link.
+3. Under `Claim an account you do not own` press `Claim it` with `near.testnet`. See `Refused`: the signature is valid, the account's keys do not include the signer, and no data was collected.
+4. Under `Review your own account`, pick Testnet, press `Connect wallet and sign` (Meteor, Intear, MyNearWallet and others through near-connect) and the same three bands run on your account. `Sign somewhere else and paste the result` accepts any NEP-413 signature. Mainnet adds a confidential 1Click quote.
 
 ## AI judges
 
-Run `bash scripts/test.sh` from a clean clone. It replays a recorded testnet account (`wrenchauditdemo1113.wrenchaudit1113.testnet`) and checks the NEP-413 signature, the account binding, refusal of a one-bit forged signature, refusal of a signature relabelled to another account, and that the confidential 1Click quote requires a user-session token.
+```
+node scripts/judge.mjs   # 9 checks against the live URL: tests, page, registry code hash, 3 evidence txs, a live run that lands a new verify() tx, refusal, tamper
+bash scripts/test.sh     # offline: NEP-413, transaction encoding, RPC fallover, forged signatures refused
+```
+
+Evidence with transaction links: [docs/EVIDENCE.md](docs/EVIDENCE.md). Company summary: [COMPANY.md](COMPANY.md).
+
+## How the privacy holds
+
+- Ownership: a fresh 32-byte nonce per request, a five-minute challenge, one use. The signing key must be a FullAccess key of the account on NEAR RPC.
+- Model: `Qwen/Qwen3.8-27B` on NEAR AI Cloud, called with a salted prompt over public data only. Your key and seed never reach Wrench.
+- Attestation: the provider TEE ed25519 receipt covers the exact request and response SHA-256 hashes, its key matches the live registration in `sworn-reg7-1113.testnet`, and `verify()` records the verdict on chain.
+- On chain: two hashes and a signature. The dossier text stays off chain.
 
 ## Tracks
 
-Lead: Privacy and Private AI. Also fits: Security (owner-gated, forged signatures refused) and DeFi (confidential 1Click quote).
+Lead: Privacy and Private AI. Also fits: Security (owner-gated, forged signatures and tampered receipts refused) and DeFi (confidential 1Click quote for mainnet accounts).
 
 ## Same builder's other project
 
 Q-015: <other project, to be assigned by the owner>
-
-## How the privacy holds
-
-- Ownership: a fresh 32-byte nonce per request, a five-minute challenge, one use.
-- Model: `Qwen/Qwen3.8-27B` on NEAR AI Cloud, called with a salted prompt.
-- Attestation: the provider TEE ed25519 receipt must cover the exact request and response SHA-256 hashes, and its key must match the live registration in `sworn-reg7-1113.testnet`, which must be unexpired and return a passing check.

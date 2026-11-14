@@ -1,51 +1,26 @@
 # Wrench interface system
 
-Source: Airbnb design system color and surface tokens, adapted to an evidence review. No Airbnb marks, assets, photography, or proprietary font files are used.
-
 ## Visual thesis
 
-Wrench reads like a private security case file: the signing and consent steps stay in a compact left rail, evidence occupies the main sheet, and a confidential transfer quote appears only after the owner reviews the dossier.
+The three places a wallet's data can live become three fields of tone: white is what leaves the browser, black is the sealed enclave, grey is the public chain. Each field fills with the real bytes that sit there after the button is pressed. The dossier stays sealed until the chain says yes.
 
 ## Tokens
 
-```css
-:root {
-  --color-canvas: #fffdfc;
-  --color-surface: #ffffff;
-  --color-surface-soft: #f7f7f7;
-  --color-ink: #222222;
-  --color-muted: #6a6a6a;
-  --color-line: #dedede;
-  --color-accent: #ff385c;
-  --color-accent-active: #e00b41;
-  --color-accent-soft: #fff0f3;
-  --color-positive: #176b46;
-  --color-positive-soft: #e9f5ee;
-  --color-warning: #8a3a20;
-  --color-warning-soft: #fff2e9;
-  --font-display: "DM Sans", sans-serif;
-  --font-body: "DM Sans", sans-serif;
-  --font-mono: "DM Mono", monospace;
-  --radius-control: 8px;
-  --radius-panel: 14px;
-  --radius-pill: 999px;
-  --space-1: 4px;
-  --space-2: 8px;
-  --space-3: 12px;
-  --space-4: 16px;
-  --space-6: 24px;
-  --space-8: 32px;
-  --space-12: 48px;
-  --space-16: 64px;
-}
-```
+- Ground #eceef0, white #ffffff, ink #0f1318, grey #d9dde1.
+- One accent, safety orange #ff5a1f, on the action button and the refusal blocks only.
+- Surfaces separate by a step in tone. No hairlines, shadows, gradients or glass.
 
-## Type and layout
+## Type
 
-- Interface title: 30px, 600 weight, 1.15 line height.
-- Section title: 18px, 600 weight, 1.3 line height.
-- Body: 14px, 400 weight, 1.55 line height.
-- Data: 13px DM Mono with tabular figures.
-- Layout: 240px signing rail beside a 1fr evidence sheet at wide widths; one column below 900px.
-- Controls: 44px minimum height, visible focus ring, explicit disabled, loading, error, and success states.
-- Evidence: plain source-linked rows.
+- DM Sans only. Display 44 to 80px at 0.98 line height and -0.045em tracking; band headline 26 to 38px; body 16px; lead 20px; data 13px system monospace inside `code` only.
+- Headlines run two lines or fewer at 390px and 1440px.
+
+## Layout
+
+- Wide: pitch and button on the left, the three bands stacked on the right, all above the fold at 1440x900.
+- Narrow: pitch, button, then the three bands.
+- Sections below: dossier (after a run), break it (tamper and unowned claim), your wallet (near-connect, testnet default), go dark (mainnet quote, after a mainnet review).
+
+## States
+
+Every band names what it waits for. The idle page shows the last real run with its age. Errors state what happened and offer a retry; a capped wallet review offers the no-wallet demo.
