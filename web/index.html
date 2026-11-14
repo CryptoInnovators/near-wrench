@@ -413,7 +413,8 @@ function renderDossier() {
   $("d-summary").textContent = clean(d.summary) || "The model returned no summary.";
   const w = d.estimated_net_worth || {};
   const range = Array.isArray(w.range) ? w.range.join(" to ") : w.range;
-  $("d-worth").textContent = [range, w.currency].filter(Boolean).join(" ") || "Not enough evidence to estimate";
+  const shown = range && w.currency && String(range).includes(w.currency) ? String(range) : [range, w.currency].filter(Boolean).join(" ");
+  $("d-worth").textContent = shown || "Not enough evidence to estimate";
   $("d-worth-basis").textContent = clean([w.confidence && `Confidence: ${w.confidence}.`, w.basis].filter(Boolean).join(" "));
   $("d-uncertainty").textContent = clean(d.uncertainty) || "";
   const leaks = $("d-leaks"); leaks.replaceChildren();
