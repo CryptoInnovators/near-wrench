@@ -9,7 +9,7 @@ Auditing your wallet shouldn't mean handing it to a dashboard.
 
 Built at #NEARHackathon: Wrench. A model reads your NEAR account inside a TEE, and Sworn verifies its signed receipt in a real testnet tx before you see a word.
 
-https://near-wrench.nearbuild.workers.dev @NEARProtocol
+https://near-wrench.nearlive.workers.dev @NEARProtocol
 ```
 
 ## B (279 characters)
@@ -17,7 +17,7 @@ https://near-wrench.nearbuild.workers.dev @NEARProtocol
 ```
 Press Audit a demo wallet. About 25 seconds later: the signature that left your browser, what the enclave saw, and a verify() tx on testnet with ok:true. Then flip one bit of the receipt and the chain says ok:false.
 
-Built at #NEARHackathon. https://near-wrench.nearbuild.workers.dev @NEARProtocol
+Built at #NEARHackathon. https://near-wrench.nearlive.workers.dev @NEARProtocol
 ```
 
 ## C (257 characters)
@@ -37,7 +37,7 @@ We built Wrench at #NEARHackathon so the answer arrives with proof. You sign one
 
 Press Send a tampered receipt and one flipped bit comes back ok:false on chain. Claim an account you do not own and Wrench refuses before collecting anything.
 
-Try it, no wallet needed: https://near-wrench.nearbuild.workers.dev
+Try it, no wallet needed: https://near-wrench.nearlive.workers.dev
 
 @NEARProtocol @NearBuilders
 ```

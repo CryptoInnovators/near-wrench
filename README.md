@@ -4,7 +4,7 @@
 
 A model reads your NEAR account's exposure inside a TEE. NEAR's Sworn registry verifies the model's signed receipt in a real testnet transaction before you see a word. Lead track: Privacy and Private AI. Also fits Security and DeFi.
 
-Live (NEAR testnet, no wallet needed): https://near-wrench.nearbuild.workers.dev
+Live (NEAR testnet, no wallet needed): https://near-wrench.nearlive.workers.dev
 
 ## Do this, see that (60 seconds)
 
