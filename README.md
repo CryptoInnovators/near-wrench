@@ -2,6 +2,8 @@
 
 [![judge](https://github.com/CryptoInnovators/near-wrench/actions/workflows/judge.yml/badge.svg)](https://github.com/CryptoInnovators/near-wrench/actions/workflows/judge.yml)
 
+[![Wrench live: audit a wallet privately inside a TEE, verified on NEAR](docs/screenshot.png)](https://wrench-audit.vercel.app)
+
 A model reads your NEAR account's exposure inside a TEE. NEAR's Sworn registry verifies the model's signed receipt in a real testnet transaction before you see a word. Lead track: Privacy and Private AI. Also fits Security and DeFi.
 
 Live (NEAR testnet, no wallet needed): https://near-wrench.nearlive.workers.dev
